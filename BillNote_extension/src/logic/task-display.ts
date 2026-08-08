@@ -1,6 +1,6 @@
 import type { TaskRecord } from './types'
 
-const SITE_SUFFIX_RE = /\s*[-_—–|｜]\s*(哔哩哔哩|bilibili|youtube|抖音|douyin|快手|kuaishou)\s*$/i
+const SITE_SUFFIX_RE = /\s*[-_—–|｜]\s*(哔哩哔哩|bilibili|youtube|抖音|douyin|快手|kuaishou|小宇宙|xiaoyuzhou(?:fm)?)\s*$/i
 
 export function normalizeVideoTitle(title: string | undefined | null): string | undefined {
   const value = title?.trim()

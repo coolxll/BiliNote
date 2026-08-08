@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { detectPlatform } from '~/logic/platform'
+import { detectPlatform, getSupportedFormats, supportsVideoFeatures } from '~/logic/platform'
 import { settings, settingsReady, tasks, tasksReady, upsertTask } from '~/logic/storage'
 import { generateNote, getTaskStatus, resolveImageUrl } from '~/logic/api'
 import { fetchBilibiliSubtitle } from '~/logic/bilibili-subtitle'
@@ -12,6 +12,8 @@ const tabTitle = ref<string>('')
 const tabId = ref<number | undefined>(undefined)
 const platform = computed(() => detectPlatform(tabUrl.value))
 const supported = computed(() => platform.value !== null)
+const videoFeaturesSupported = computed(() => supportsVideoFeatures(platform.value))
+const videoUnderstandingEnabled = computed(() => videoFeaturesSupported.value && settings.value.video_understanding)
 
 const submitting = ref(false)
 const errorMsg = ref('')
@@ -58,7 +60,7 @@ async function poll(taskId: string) {
 async function start() {
   errorMsg.value = ''
   if (!supported.value) {
-    errorMsg.value = '当前页面不是支持的视频链接'
+    errorMsg.value = '当前页面不是支持的内容链接'
     return
   }
   if (!settings.value.providerId || !settings.value.modelName) {
@@ -68,11 +70,12 @@ async function start() {
   submitting.value = true
   try {
     // B 站：在用户浏览器里直接抓字幕（带本地登录态 cookie），跳过后端的 download_subtitles 与音频转写
-    const prefetched = platform.value === 'bilibili' ? await fetchBilibiliSubtitle(tabUrl.value) : null
-    const formats = settings.value.formats || []
+    const currentPlatform = platform.value!
+    const prefetched = currentPlatform === 'bilibili' ? await fetchBilibiliSubtitle(tabUrl.value) : null
+    const formats = getSupportedFormats(currentPlatform, settings.value.formats || [])
     const { task_id } = await generateNote({
       video_url: tabUrl.value,
-      platform: platform.value!,
+      platform: currentPlatform,
       quality: settings.value.quality,
       provider_id: settings.value.providerId,
       model_name: settings.value.modelName,
@@ -82,16 +85,16 @@ async function start() {
       link: formats.includes('link'),
       style: settings.value.style || undefined,
       extras: settings.value.extras || undefined,
-      video_understanding: settings.value.video_understanding || undefined,
-      video_interval: settings.value.video_understanding ? settings.value.video_interval : undefined,
-      grid_size: settings.value.video_understanding ? settings.value.grid_size : undefined,
+      video_understanding: videoUnderstandingEnabled.value || undefined,
+      video_interval: videoUnderstandingEnabled.value ? settings.value.video_interval : undefined,
+      grid_size: videoUnderstandingEnabled.value ? settings.value.grid_size : undefined,
       prefetched_transcript: prefetched ?? undefined,
     })
     activeTaskId.value = task_id
     upsertTask({
       taskId: task_id,
       videoUrl: tabUrl.value,
-      platform: platform.value!,
+      platform: currentPlatform,
       status: 'PENDING',
       message: '已提交',
       createdAt: Date.now(),
@@ -119,6 +122,15 @@ function toggleFormat(value: NoteFormat, checked: boolean) {
   settings.value.formats = checked
     ? Array.from(new Set([...cur, value]))
     : cur.filter(v => v !== value)
+}
+
+function isFormatAvailable(value: NoteFormat): boolean {
+  return videoFeaturesSupported.value || (value !== 'screenshot' && value !== 'link')
+}
+
+function toggleVideoUnderstanding(checked: boolean) {
+  if (videoFeaturesSupported.value)
+    settings.value.video_understanding = checked
 }
 
 async function openSidePanel() {
@@ -185,7 +197,7 @@ onUnmounted(() => {
     </div>
 
     <div v-if="!supported" class="text-xs text-amber-700 bg-amber-50 p-2 rounded">
-      当前页面不是 BiliNote 支持的视频链接（Bilibili / YouTube / Douyin / Kuaishou）
+      当前页面不是 BiliNote 支持的内容链接（Bilibili / YouTube / Douyin / Kuaishou / 小宇宙单集）
     </div>
 
     <fieldset class="border rounded p-2 flex flex-col gap-2" :disabled="!supported || submitting">
@@ -212,7 +224,8 @@ onUnmounted(() => {
           <label v-for="f in NOTE_FORMATS" :key="f.value" class="flex items-center gap-1">
             <input
               type="checkbox"
-              :checked="(settings.formats || []).includes(f.value)"
+              :checked="isFormatAvailable(f.value) && (settings.formats || []).includes(f.value)"
+              :disabled="!isFormatAvailable(f.value)"
               @change="toggleFormat(f.value, ($event.target as HTMLInputElement).checked)"
             >
             {{ f.label }}
@@ -232,10 +245,18 @@ onUnmounted(() => {
           />
         </label>
         <label class="flex items-center gap-2 mt-2">
-          <input v-model="settings.video_understanding" type="checkbox">
+          <input
+            type="checkbox"
+            :checked="videoUnderstandingEnabled"
+            :disabled="!videoFeaturesSupported"
+            @change="toggleVideoUnderstanding(($event.target as HTMLInputElement).checked)"
+          >
           <span class="text-gray-600">启用视频理解（抽帧拼图喂视觉模型）</span>
         </label>
-        <div v-if="settings.video_understanding" class="grid grid-cols-3 gap-2 mt-2">
+        <p v-if="!videoFeaturesSupported" class="text-gray-500 mt-1">
+          小宇宙为纯音频内容，不支持截图、原片跳转和视频理解。
+        </p>
+        <div v-if="videoUnderstandingEnabled" class="grid grid-cols-3 gap-2 mt-2">
           <label class="flex flex-col gap-1">
             <span class="text-gray-600">抽帧间隔(秒)</span>
             <input
@@ -263,7 +284,7 @@ onUnmounted(() => {
             >
           </label>
         </div>
-        <p v-if="settings.video_understanding" class="text-amber-700 mt-1">
+        <p v-if="videoUnderstandingEnabled" class="text-amber-700 mt-1">
           ⚠ 需要选择视觉模型（GPT-4o / Gemini / Claude 等），文字模型会忽略图片
         </p>
       </details>

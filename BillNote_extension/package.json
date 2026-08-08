@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@9.7.1",
-  "description": "在浏览器里把视频链接一键变成 Markdown 笔记（Bilibili / YouTube / Douyin / Kuaishou）",
+  "description": "在浏览器里把视频或播客链接一键变成 Markdown 笔记（Bilibili / YouTube / Douyin / Kuaishou / Xiaoyuzhou）",
   "scripts": {
     "dev": "npm run clear && cross-env NODE_ENV=development run-p dev:*",
     "dev-firefox": "npm run clear && cross-env NODE_ENV=development EXTENSION=firefox run-p dev:*",

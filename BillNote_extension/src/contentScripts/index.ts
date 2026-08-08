@@ -3,7 +3,7 @@ import App from './views/App.vue'
 import { setupApp } from '~/logic/common-setup'
 import { detectPlatform } from '~/logic/platform'
 
-// 只在支持的视频平台上挂悬浮按钮，避免污染其他网站
+// 只在支持的内容平台上挂悬浮按钮，避免污染其他网站
 (() => {
   if (!detectPlatform(window.location.href))
     return
