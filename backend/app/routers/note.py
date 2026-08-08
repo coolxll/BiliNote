@@ -15,7 +15,7 @@ from app.enmus.exception import NoteErrorEnum
 from app.enmus.note_enums import DownloadQuality
 from app.exceptions.note import NoteError
 from app.services.note import NoteGenerator, logger
-from app.services.task_serial_executor import task_serial_executor
+from app.services.task_serial_executor import task_executor
 from app.services.task_log import (
     append_task_log,
     read_task_logs,
@@ -148,7 +148,7 @@ def run_note_task(task_id: str, video_url: str, platform: str, quality: Download
 
     with task_log_context(task_id):
         logger.info(f"任务进入执行队列 (task_id={task_id})")
-        note = task_serial_executor.run(_execute_note_task)
+        note = task_executor.run(_execute_note_task)
         logger.info(f"Note generated: {task_id}")
         if not note or not note.markdown:
             logger.warning(f"任务 {task_id} 执行失败，跳过保存")
@@ -227,7 +227,7 @@ def generate_note(data: VideoRequest, background_tasks: BackgroundTasks):
         reset_task_logs(task_id)
         append_task_log(task_id, "任务已提交，等待后台处理")
 
-        # 统一先写入 PENDING，表示已进入队列等待串行执行
+        # 统一先写入 PENDING，表示已进入后台执行队列
         NoteGenerator()._update_status(task_id, TaskStatus.PENDING)
 
         # 客户端已经抓好字幕的话，写到转写缓存文件，NoteGenerator 的 cache-hit 逻辑会直接用上
