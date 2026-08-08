@@ -16,6 +16,12 @@ from app.enmus.note_enums import DownloadQuality
 from app.exceptions.note import NoteError
 from app.services.note import NoteGenerator, logger
 from app.services.task_serial_executor import task_serial_executor
+from app.services.task_log import (
+    append_task_log,
+    read_task_logs,
+    reset_task_logs,
+    task_log_context,
+)
 from app.utils.response import ResponseWrapper as R
 from app.utils.url_parser import extract_video_id
 from app.validators.video_url_validator import is_supported_video_url
@@ -122,37 +128,39 @@ def run_note_task(task_id: str, video_url: str, platform: str, quality: Download
         raise HTTPException(status_code=400, detail="请选择模型和提供者")
 
     def _execute_note_task():
-        return NoteGenerator().generate(
-            video_url=video_url,
-            platform=platform,
-            quality=quality,
-            task_id=task_id,
-            model_name=model_name,
-            provider_id=provider_id,
-            link=link,
-            _format=_format,
-            style=style,
-            extras=extras,
-            screenshot=screenshot,
-            video_understanding=video_understanding,
-            video_interval=video_interval,
-            grid_size=grid_size,
-        )
+        with task_log_context(task_id):
+            return NoteGenerator().generate(
+                video_url=video_url,
+                platform=platform,
+                quality=quality,
+                task_id=task_id,
+                model_name=model_name,
+                provider_id=provider_id,
+                link=link,
+                _format=_format,
+                style=style,
+                extras=extras,
+                screenshot=screenshot,
+                video_understanding=video_understanding,
+                video_interval=video_interval,
+                grid_size=grid_size,
+            )
 
-    logger.info(f"任务进入执行队列 (task_id={task_id})")
-    note = task_serial_executor.run(_execute_note_task)
-    logger.info(f"Note generated: {task_id}")
-    if not note or not note.markdown:
-        logger.warning(f"任务 {task_id} 执行失败，跳过保存")
-        return
-    save_note_to_file(task_id, note)
+    with task_log_context(task_id):
+        logger.info(f"任务进入执行队列 (task_id={task_id})")
+        note = task_serial_executor.run(_execute_note_task)
+        logger.info(f"Note generated: {task_id}")
+        if not note or not note.markdown:
+            logger.warning(f"任务 {task_id} 执行失败，跳过保存")
+            return
+        save_note_to_file(task_id, note)
 
-    # 自动建立向量索引（用于 AI 问答），失败不影响笔记生成
-    try:
-        from app.services.vector_store import VectorStoreManager
-        VectorStoreManager().index_task(task_id)
-    except Exception as e:
-        logger.warning(f"向量索引失败（不影响笔记）: {e}")
+        # 自动建立向量索引（用于 AI 问答），失败不影响笔记生成
+        try:
+            from app.services.vector_store import VectorStoreManager
+            VectorStoreManager().index_task(task_id)
+        except Exception as e:
+            logger.warning(f"向量索引失败（不影响笔记）: {e}")
 
 
 @router.post('/delete_task')
@@ -216,6 +224,9 @@ def generate_note(data: VideoRequest, background_tasks: BackgroundTasks):
             # 正常新建任务
             task_id = str(uuid.uuid4())
 
+        reset_task_logs(task_id)
+        append_task_log(task_id, "任务已提交，等待后台处理")
+
         # 统一先写入 PENDING，表示已进入队列等待串行执行
         NoteGenerator()._update_status(task_id, TaskStatus.PENDING)
 
@@ -238,6 +249,7 @@ def generate_note(data: VideoRequest, background_tasks: BackgroundTasks):
 def get_task_status(task_id: str):
     status_path = os.path.join(NOTE_OUTPUT_DIR, f"{task_id}.status.json")
     result_path = os.path.join(NOTE_OUTPUT_DIR, f"{task_id}.json")
+    task_logs = read_task_logs(task_id)
 
     # 优先读状态文件
     if os.path.exists(status_path):
@@ -256,6 +268,7 @@ def get_task_status(task_id: str):
                     "status": status,
                     "result": result_content,
                     "message": message,
+                    "logs": task_logs,
                     "updated_at": status_content.get("updated_at"),
                     "task_id": task_id
                 })
@@ -264,6 +277,7 @@ def get_task_status(task_id: str):
                 return R.success({
                     "status": TaskStatus.PENDING.value,
                     "message": "任务完成，但结果文件未找到",
+                    "logs": task_logs,
                     "updated_at": status_content.get("updated_at"),
                     "task_id": task_id
                 })
@@ -275,6 +289,7 @@ def get_task_status(task_id: str):
                 data={
                     "status": status,
                     "message": message or "任务失败",
+                    "logs": task_logs,
                     "updated_at": status_content.get("updated_at"),
                     "task_id": task_id,
                 },
@@ -284,6 +299,7 @@ def get_task_status(task_id: str):
         return R.success({
             "status": status,
             "message": message,
+            "logs": task_logs,
             "updated_at": status_content.get("updated_at"),
             "task_id": task_id
         })
@@ -295,6 +311,7 @@ def get_task_status(task_id: str):
         return R.success({
             "status": TaskStatus.SUCCESS.value,
             "result": result_content,
+            "logs": task_logs,
             "updated_at": None,
             "task_id": task_id
         })
@@ -303,6 +320,7 @@ def get_task_status(task_id: str):
     return R.success({
         "status": TaskStatus.PENDING.value,
         "message": "任务排队中",
+        "logs": task_logs,
         "updated_at": None,
         "task_id": task_id
     })

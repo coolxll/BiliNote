@@ -40,6 +40,12 @@ export interface Transcript {
   raw: any
   segments: Segment[]
 }
+export interface TaskLogEntry {
+  timestamp: string
+  level: string
+  logger: string
+  message: string
+}
 export interface Markdown {
   ver_id: string
   content: string
@@ -57,6 +63,7 @@ export interface Task {
   statusUpdatedAt?: string
   lastPolledAt?: string
   startedAt?: string
+  logs?: TaskLogEntry[]
   audioMeta: AudioMeta
   createdAt: string
   formData: {
@@ -98,6 +105,7 @@ export const useTaskStore = create<TaskStore>()(
               status: 'PENDING',
               startedAt: new Date().toISOString(),
               statusMessage: '排队中',
+              logs: [],
               markdown: '',
               platform: platform,
               transcript: {
@@ -215,6 +223,7 @@ export const useTaskStore = create<TaskStore>()(
                     startedAt: new Date().toISOString(),
                     statusMessage: '排队中',
                     statusUpdatedAt: undefined,
+                    logs: [],
                   }
                   : t
           ),
