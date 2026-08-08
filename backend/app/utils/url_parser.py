@@ -1,5 +1,7 @@
 import re
 from typing import Optional
+from urllib.parse import urlparse
+
 import requests
 
 
@@ -8,7 +10,7 @@ def extract_video_id(url: str, platform: str) -> Optional[str]:
     从视频链接中提取视频 ID
 
     :param url: 视频链接
-    :param platform: 平台名（bilibili / youtube / douyin）
+    :param platform: 平台名（bilibili / youtube / douyin / xiaoyuzhou）
     :return: 提取到的视频 ID 或 None
     """
     if platform == "bilibili":
@@ -30,6 +32,13 @@ def extract_video_id(url: str, platform: str) -> Optional[str]:
     elif platform == "douyin":
         # 匹配 douyin.com/video/1234567890123456789
         match = re.search(r"/video/(\d+)", url)
+        return match.group(1) if match else None
+
+    elif platform == "xiaoyuzhou":
+        parsed = urlparse(url)
+        if parsed.hostname not in {"xiaoyuzhoufm.com", "www.xiaoyuzhoufm.com"}:
+            return None
+        match = re.fullmatch(r"/episode/([0-9a-fA-F]{24})/?", parsed.path)
         return match.group(1) if match else None
 
     return None

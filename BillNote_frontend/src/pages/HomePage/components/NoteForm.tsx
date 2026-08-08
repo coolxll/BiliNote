@@ -155,6 +155,7 @@ const NoteForm = () => {
   /* ---- 派生状态（只 watch 一次，提高性能） ---- */
   const platform = useWatch({ control: form.control, name: 'platform' }) as string
   const videoUnderstandingEnabled = useWatch({ control: form.control, name: 'video_understanding' })
+  const isAudioOnlyPlatform = platform === 'xiaoyuzhou'
   const editing = currentTask && currentTask.id
 
   const goModelAdd = () => {
@@ -194,6 +195,14 @@ const NoteForm = () => {
     // 还要加上 formData 的各字段，或者直接 currentTask
     currentTask?.formData,
   ])
+  useEffect(() => {
+    if (!isAudioOnlyPlatform) return
+    form.setValue('video_understanding', false)
+    form.setValue(
+      'format',
+      (form.getValues('format') || []).filter(value => !['link', 'screenshot'].includes(value)),
+    )
+  }, [form, isAudioOnlyPlatform])
 
   /* ---- 帮助函数 ---- */
   const isGenerating = () => !['SUCCESS', 'FAILED', undefined].includes(getCurrentTask()?.status)
@@ -481,6 +490,7 @@ const NoteForm = () => {
                     <FormLabel>启用</FormLabel>
                     <Checkbox
                       checked={videoUnderstandingEnabled}
+                      disabled={isAudioOnlyPlatform}
                       onCheckedChange={v => form.setValue('video_understanding', v)}
                     />
                   </div>
@@ -549,8 +559,8 @@ const NoteForm = () => {
                   value={field.value}
                   onChange={field.onChange}
                   disabledMap={{
-                    link: platform === 'local',
-                    screenshot: !videoUnderstandingEnabled,
+                    link: platform === 'local' || isAudioOnlyPlatform,
+                    screenshot: !videoUnderstandingEnabled || isAudioOnlyPlatform,
                   }}
                 />
                 <FormMessage />

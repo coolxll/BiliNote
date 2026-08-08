@@ -11,6 +11,7 @@ const platformLabel: Record<string, string> = {
   bilibili: '哔哩哔哩',
   youtube: 'YouTube',
   douyin: '抖音',
+  xiaoyuzhou: '小宇宙',
   xiaohongshu: '小红书',
 }
 
