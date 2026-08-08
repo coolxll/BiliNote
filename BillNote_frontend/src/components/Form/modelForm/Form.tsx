@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useProviderStore } from '@/store/providerStore'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { testConnection, fetchModels, deleteModelById } from '@/services/model.ts'
 import {
@@ -124,12 +124,20 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
     }
     load()
   }, [id])
+
+  const reloadEnabledModels = useCallback(async () => {
+    if (!id) return
+    const refreshedModels = await loadModelsById(id)
+    setModels(refreshedModels || [])
+  }, [id, loadModelsById])
+
   const handelDelete=async (modelId)=>{
     if (!window.confirm('确定要删除这个模型吗？')) return
 
     try {
       const res = await deleteModelById(modelId)
       console.log('🔧 删除结果:', res)
+      await reloadEnabledModels()
 
       toast.success('删除成功')
 
@@ -298,7 +306,7 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
             <h2 className={'font-bold'}>注意!</h2>
             <span>请确保已经保存供应商信息,以及通过测试连通性.</span>
           </div>
-          <ModelSelector providerId={id!} />
+          <ModelSelector providerId={id!} onSaved={reloadEnabledModels} />
 
           {/*<datalist id="model-options">*/}
           {/*  {modelOptions.map(model => (*/}

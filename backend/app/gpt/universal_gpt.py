@@ -12,8 +12,11 @@ from app.gpt.prompt import BASE_PROMPT, AI_SUM, SCREENSHOT, LINK, MERGE_PROMPT
 from app.gpt.utils import fix_markdown
 from app.gpt.request_chunker import RequestChunker
 from app.models.transcriber_model import TranscriptSegment
+from app.utils.logger import get_logger
 from datetime import timedelta
 from typing import List
+
+logger = get_logger(__name__)
 
 
 class UniversalGPT(GPT):
@@ -221,6 +224,10 @@ class UniversalGPT(GPT):
                 return self._do_create(messages)
             except Exception as exc:
                 last_exc = exc
+                logger.warning(
+                    f"GPT 请求失败: model={self.model}, attempt={attempt + 1}/{self._max_retry_attempts}, "
+                    f"error={type(exc).__name__}: {exc}"
+                )
                 if attempt == self._max_retry_attempts - 1 or not self._is_retryable_error(exc):
                     raise
                 sleep_seconds = self._retry_base_backoff * (2 ** attempt)
@@ -308,7 +315,8 @@ class UniversalGPT(GPT):
         if len(partials) > len(chunks):
             partials = []
 
-        for chunk in chunks[len(partials):]:
+        total_chunks = len(chunks)
+        for chunk_index, chunk in enumerate(chunks[len(partials):], start=len(partials) + 1):
             messages = self.create_messages(
                 chunk.segments,
                 title=source.title,
@@ -318,6 +326,13 @@ class UniversalGPT(GPT):
                 style=source.style,
                 extras=source.extras
             )
+            request_bytes = self._estimate_messages_bytes(messages)
+            started_at = time.perf_counter()
+            logger.info(
+                f"GPT 请求开始: model={self.model}, phase=summarize, "
+                f"chunk={chunk_index}/{total_chunks}, segments={len(chunk.segments)}, "
+                f"prompt_bytes={request_bytes}"
+            )
             try:
                 response = self._chat_completion_create(messages)
             except Exception as exc:
@@ -326,6 +341,16 @@ class UniversalGPT(GPT):
                 raise
 
             partials.append(response.choices[0].message.content.strip())
+            usage = getattr(response, "usage", None)
+            details = getattr(usage, "completion_tokens_details", None)
+            logger.info(
+                f"GPT 请求完成: model={self.model}, actual_model={getattr(response, 'model', None)}, "
+                f"phase=summarize, chunk={chunk_index}/{total_chunks}, "
+                f"elapsed={time.perf_counter() - started_at:.2f}s, "
+                f"prompt_tokens={getattr(usage, 'prompt_tokens', None)}, "
+                f"completion_tokens={getattr(usage, 'completion_tokens', None)}, "
+                f"reasoning_tokens={getattr(details, 'reasoning_tokens', None)}"
+            )
             if checkpoint_key and source_signature:
                 self._save_checkpoint(checkpoint_key, source_signature, partials, "summarize")
 

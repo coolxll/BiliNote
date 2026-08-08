@@ -1,7 +1,14 @@
 @echo off
 cd /d "%~dp0"
 
-start "Backend" powershell -NoExit -Command "cd backend; conda activate bili; python main.py"
-start "Frontend" powershell -NoExit -Command "cd BillNote_frontend; npm run dev"
+if not exist ".venv\Scripts\python.exe" (
+    echo uv environment not found: .venv\Scripts\python.exe
+    exit /b 1
+)
 
-start http://localhost:3015/
+if not exist "logs" mkdir "logs"
+start "" /b "%~dp0backend-start.bat"
+start "" /b "%~dp0frontend-start.bat"
+timeout /t 3 /nobreak >nul
+start "" http://127.0.0.1:3015/
+

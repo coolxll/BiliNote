@@ -6,7 +6,17 @@ import toast from 'react-hot-toast'
 import { get, set, del } from 'idb-keyval'
 
 
-export type TaskStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILD'
+export type TaskStatus =
+  | 'PENDING'
+  | 'PARSING'
+  | 'DOWNLOADING'
+  | 'TRANSCRIBING'
+  | 'SUMMARIZING'
+  | 'FORMATTING'
+  | 'SAVING'
+  | 'SUCCESS'
+  | 'FAILED'
+  | 'FAILD'
 
 export interface AudioMeta {
   cover_url: string
@@ -43,6 +53,10 @@ export interface Task {
   markdown: string|Markdown [] //为了兼容之前的笔记
   transcript: Transcript
   status: TaskStatus
+  statusMessage?: string
+  statusUpdatedAt?: string
+  lastPolledAt?: string
+  startedAt?: string
   audioMeta: AudioMeta
   createdAt: string
   formData: {
@@ -82,6 +96,8 @@ export const useTaskStore = create<TaskStore>()(
               formData: formData,
               id: taskId,
               status: 'PENDING',
+              startedAt: new Date().toISOString(),
+              statusMessage: '排队中',
               markdown: '',
               platform: platform,
               transcript: {
@@ -196,6 +212,9 @@ export const useTaskStore = create<TaskStore>()(
                     ...t,
                     formData: newFormData, // ✅ 显式更新 formData
                     status: 'PENDING',
+                    startedAt: new Date().toISOString(),
+                    statusMessage: '排队中',
+                    statusUpdatedAt: undefined,
                   }
                   : t
           ),

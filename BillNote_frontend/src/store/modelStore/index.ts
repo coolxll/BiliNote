@@ -99,28 +99,13 @@ export const useModelStore = create<ModelStore>()(
     //  新增模型逻辑
     addNewModel: async (providerId: string, modelId: string) => {
       try {
-        const res = await addModel({ provider_id: providerId, model_name: modelId })
-
-        if (res.code === 0) {
-          console.log('新增模型成功:', modelId)
-          set((state) => ({
-            models: [
-              ...state.models,
-              {
-                id: modelId,
-                created: Date.now(),
-                object: 'model',
-                owned_by: '',
-                permission: '',
-                root: '',
-              },
-            ],
-          }))
-        } else {
-          console.error('新增模型失败', res.msg)
-        }
+        // request 拦截器已经解包成功响应；/models 成功时 data 为 null，
+        // 不能再读取 res.code。失败会由 request 直接 reject。
+        await addModel({ provider_id: providerId, model_name: modelId })
+        console.log('新增模型成功:', modelId)
       } catch (error) {
         console.error('添加模型出错', error)
+        throw error
       }
     },
 

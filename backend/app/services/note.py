@@ -2,6 +2,7 @@ import json
 import logging
 import os
 from dataclasses import asdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Tuple, Union, Any
 
@@ -322,9 +323,18 @@ class NoteGenerator:
         NOTE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         status_file = NOTE_OUTPUT_DIR / f"{task_id}.status.json"
         print(f"写入状态文件: {status_file} 当前状态: {status}")
-        data = {"status": status.value if isinstance(status, TaskStatus) else status}
-        if message:
-            data["message"] = message
+        status_value = status.value if isinstance(status, TaskStatus) else status
+        try:
+            status_enum = TaskStatus(status_value)
+            default_message = TaskStatus.description(status_enum)
+        except ValueError:
+            default_message = "处理中"
+
+        data = {
+            "status": status_value,
+            "message": message or default_message,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
 
         try:
             # First create a temporary file
@@ -691,8 +701,8 @@ class NoteGenerator:
         :param platform: 平台标识
         :param task_id: 任务 ID
         """
-        try:
-            insert_video_task(video_id=video_id, platform=platform, task_id=task_id)
+        inserted = insert_video_task(video_id=video_id, platform=platform, task_id=task_id)
+        if inserted:
             logger.info(f"已保存任务记录到数据库 (video_id={video_id}, platform={platform}, task_id={task_id})")
-        except Exception as e:
-            logger.error(f"保存任务记录失败：{e}")
+        else:
+            logger.info(f"任务记录已存在，跳过重复保存 (video_id={video_id}, platform={platform}, task_id={task_id})")

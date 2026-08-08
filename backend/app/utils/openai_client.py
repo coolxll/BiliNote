@@ -7,6 +7,7 @@
     `httpx.LocalProtocolError: Illegal header value b'Bearer '` 这种天书报错。
     在入口挡掉，给用户「xxx 的 API Key 未配置」这种能看懂的提示。
 """
+import os
 from typing import Optional
 
 from openai import OpenAI
@@ -31,7 +32,13 @@ def build_openai_client(
     if not api_key or not str(api_key).strip():
         raise ValueError(f"{key_label} 未配置，请先在「设置」里填写后再使用")
 
-    kwargs = {"api_key": str(api_key).strip(), "base_url": base_url}
+    kwargs = {
+        "api_key": str(api_key).strip(),
+        "base_url": base_url,
+        "default_headers": {
+            "User-Agent": os.getenv("BILINOTE_OPENAI_USER_AGENT", "BiliNote/2.4.4")
+        },
+    }
     if timeout is not None:
         kwargs["timeout"] = timeout
 
@@ -43,3 +50,4 @@ def build_openai_client(
         logger.info(f"OpenAI 客户端走代理: {proxy_url}")
 
     return OpenAI(**kwargs)
+

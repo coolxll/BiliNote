@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, memo, FC } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Button } from '@/components/ui/button.tsx'
-import { Copy, Download, ArrowRight, Play, ExternalLink } from 'lucide-react'
+import { Copy, Download, ArrowRight, Play, ExternalLink, Clock3, Activity, CircleAlert } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import Error from '@/components/Lottie/error.tsx'
 import Loading from '@/components/Lottie/Loading.tsx'
@@ -40,12 +40,43 @@ interface MarkdownViewerProps {
 }
 
 const steps = [
+  { label: '排队中', key: 'PENDING' },
   { label: '解析链接', key: 'PARSING' },
   { label: '下载音频', key: 'DOWNLOADING' },
   { label: '转写文字', key: 'TRANSCRIBING' },
   { label: '总结内容', key: 'SUMMARIZING' },
-  { label: '保存完成', key: 'SUCCESS' },
+  { label: '保存', key: 'SAVING' },
+  { label: '完成', key: 'SUCCESS' },
 ]
+
+const statusLabels: Record<string, string> = {
+  PENDING: '排队中',
+  PARSING: '正在解析链接',
+  DOWNLOADING: '正在下载音频',
+  TRANSCRIBING: '正在转写文字',
+  SUMMARIZING: '正在总结内容',
+  FORMATTING: '正在整理结果',
+  SAVING: '正在保存结果',
+}
+
+function formatDuration(milliseconds: number) {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000))
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  return hours > 0
+    ? `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+    : `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
+
+function formatAge(milliseconds: number) {
+  const totalSeconds = Math.floor(Math.max(0, milliseconds) / 1000)
+  if (totalSeconds < 5) return '刚刚'
+  if (totalSeconds < 60) return `${totalSeconds} 秒前`
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return seconds > 0 ? `${minutes} 分 ${seconds} 秒前` : `${minutes} 分钟前`
+}
 
 const remarkPlugins = [gfm, remarkMath]
 const rehypePlugins = [rehypeKatex, rehypeSlug]
@@ -330,7 +361,25 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
   const [showTranscribe, setShowTranscribe] = useState(false)
   const [showChat, setShowChat] = useState<false | 'half' | 'full'>(false)
   const [viewMode, setViewMode] = useState<'map' | 'preview'>('preview')
+  const [now, setNow] = useState(() => Date.now())
   const svgRef = useRef<SVGSVGElement>(null)
+
+  useEffect(() => {
+    if (status !== 'loading') return
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [status])
+
+  const startedAt = currentTask?.startedAt || currentTask?.createdAt
+  const startedAtMs = startedAt ? Date.parse(startedAt) : now
+  const elapsed = formatDuration(now - (Number.isNaN(startedAtMs) ? now : startedAtMs))
+  const statusUpdatedAtMs = currentTask?.statusUpdatedAt
+    ? Date.parse(currentTask.statusUpdatedAt)
+    : NaN
+  const statusAge = Number.isNaN(statusUpdatedAtMs) ? 0 : Math.max(0, now - statusUpdatedAtMs)
+  const statusIsStale = statusAge >= 60_000
+  const statusLabel = statusLabels[taskStatus] || currentTask?.statusMessage || '处理中'
+  const stepStatus = taskStatus === 'FORMATTING' ? 'SAVING' : taskStatus
 
   // 缓存 ReactMarkdown components，仅在 baseURL 变化时重建
   const markdownComponents = useMemo(() => createMarkdownComponents(baseURL), [baseURL])
@@ -417,12 +466,40 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
 
   if (status === 'loading') {
     return (
-      <div className="flex h-screen w-full flex-col items-center justify-center space-y-4 text-neutral-500">
-        <StepBar steps={steps} currentStep={taskStatus} />
+      <div className="flex h-screen w-full flex-col items-center justify-center space-y-5 px-4 text-neutral-500">
+        <div className="w-full max-w-4xl">
+          <StepBar steps={steps} currentStep={stepStatus} />
+        </div>
         <Loading className="h-5 w-5" />
         <div className="text-center text-sm">
-          <p className="text-lg font-bold">正在生成笔记，请稍候…</p>
-          <p className="mt-2 text-xs text-neutral-500">这可能需要几秒钟时间，取决于视频长度</p>
+          <p className="text-lg font-bold">{statusLabel}…</p>
+          <p className="mt-2 text-xs text-neutral-500">
+            {currentTask?.statusMessage || '任务正在后台处理中'}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-neutral-500">
+          <span className="inline-flex items-center gap-1.5">
+            <Clock3 className="h-3.5 w-3.5" />
+            已用时 {elapsed}
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-emerald-600">
+            <Activity className="h-3.5 w-3.5" />
+            后台状态轮询正常
+          </span>
+          {currentTask?.statusUpdatedAt && !Number.isNaN(statusUpdatedAtMs) && (
+            <span>最近状态更新于 {formatAge(statusAge)}</span>
+          )}
+        </div>
+        {statusIsStale && (
+          <div className="flex max-w-xl items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              这个阶段已经持续 {formatDuration(statusAge)}，后台仍能正常响应；如果是总结或转写阶段，可能正在等待模型返回。
+            </span>
+          </div>
+        )}
+        <div className="text-center text-[11px] text-neutral-400">
+          任务 ID：{currentTask?.id}
         </div>
       </div>
     )

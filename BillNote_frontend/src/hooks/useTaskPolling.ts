@@ -29,27 +29,44 @@ export const useTaskPolling = (interval = 3000) => {
         try {
           const res = await get_task_status(task.id)
           const { status } = res
+          const polledAt = new Date().toISOString()
+          const statusData = {
+            status,
+            statusMessage: res.message || undefined,
+            statusUpdatedAt: res.updated_at || undefined,
+            lastPolledAt: polledAt,
+          }
 
-          if (status && status !== task.status) {
+          if (
+            status &&
+            (status !== task.status ||
+              res.message !== task.statusMessage ||
+              res.updated_at !== task.statusUpdatedAt ||
+              !task.lastPolledAt)
+          ) {
             if (status === 'SUCCESS') {
               const { markdown, transcript, audio_meta } = res.result
               toast.success('笔记生成成功')
               updateTaskContent(task.id, {
-                status,
+                ...statusData,
                 markdown,
                 transcript,
                 audioMeta: audio_meta,
               })
             } else if (status === 'FAILED') {
-              updateTaskContent(task.id, { status })
+              updateTaskContent(task.id, statusData)
               console.warn(`⚠️ 任务 ${task.id} 失败`)
             } else {
-              updateTaskContent(task.id, { status })
+              updateTaskContent(task.id, statusData)
             }
           }
         } catch (e) {
           console.error('❌ 任务轮询失败：', e)
-          updateTaskContent(task.id, { status: 'FAILED' })
+          updateTaskContent(task.id, {
+            status: 'FAILED',
+            statusMessage: e?.data?.message || e?.msg || '无法获取任务状态',
+            lastPolledAt: new Date().toISOString(),
+          })
         }
       }
     }, interval)

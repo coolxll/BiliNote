@@ -256,6 +256,7 @@ def get_task_status(task_id: str):
                     "status": status,
                     "result": result_content,
                     "message": message,
+                    "updated_at": status_content.get("updated_at"),
                     "task_id": task_id
                 })
             else:
@@ -263,16 +264,27 @@ def get_task_status(task_id: str):
                 return R.success({
                     "status": TaskStatus.PENDING.value,
                     "message": "任务完成，但结果文件未找到",
+                    "updated_at": status_content.get("updated_at"),
                     "task_id": task_id
                 })
 
         if status == TaskStatus.FAILED.value:
-            return R.error(message or "任务失败", code=500)
+            return R.error(
+                message or "任务失败",
+                code=500,
+                data={
+                    "status": status,
+                    "message": message or "任务失败",
+                    "updated_at": status_content.get("updated_at"),
+                    "task_id": task_id,
+                },
+            )
 
         # 处理中状态
         return R.success({
             "status": status,
             "message": message,
+            "updated_at": status_content.get("updated_at"),
             "task_id": task_id
         })
 
@@ -283,6 +295,7 @@ def get_task_status(task_id: str):
         return R.success({
             "status": TaskStatus.SUCCESS.value,
             "result": result_content,
+            "updated_at": None,
             "task_id": task_id
         })
 
@@ -290,6 +303,7 @@ def get_task_status(task_id: str):
     return R.success({
         "status": TaskStatus.PENDING.value,
         "message": "任务排队中",
+        "updated_at": None,
         "task_id": task_id
     })
 
