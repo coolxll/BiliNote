@@ -2,13 +2,15 @@
 import 'uno.css'
 import { computed, ref } from 'vue'
 import { sendMessage } from 'webext-bridge/content-script'
-import { detectPlatform, PLATFORM_LABELS } from '~/logic/platform'
+import { PLATFORM_CONTENT_LABELS, PLATFORM_LABELS, detectPlatform } from '~/logic/platform'
 
 const platform = detectPlatform(window.location.href)
 const busy = ref(false)
 const toast = ref<{ kind: 'ok' | 'err', text: string } | null>(null)
 
-const label = computed(() => platform ? `用 BiliNote 总结这个${PLATFORM_LABELS[platform]}视频` : '')
+const label = computed(() => platform
+  ? `用 BiliNote 总结这个${PLATFORM_LABELS[platform]}${PLATFORM_CONTENT_LABELS[platform]}`
+  : '')
 
 async function trigger() {
   if (!platform || busy.value)
@@ -31,7 +33,9 @@ async function trigger() {
   }
   finally {
     busy.value = false
-    setTimeout(() => { toast.value = null }, 4000)
+    setTimeout(() => {
+      toast.value = null
+    }, 4000)
   }
 }
 </script>

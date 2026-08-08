@@ -1,7 +1,7 @@
 import { onMessage } from 'webext-bridge/background'
 import type { Settings, TaskRecord } from '~/logic/types'
 import { DEFAULT_SETTINGS, MAX_TASKS, SETTINGS_KEY, TASKS_KEY } from '~/logic/constants'
-import { detectPlatform } from '~/logic/platform'
+import { detectPlatform, getSupportedFormats, supportsVideoFeatures } from '~/logic/platform'
 import { fetchBilibiliSubtitle } from '~/logic/bilibili-subtitle'
 import { normalizeVideoTitle } from '~/logic/task-display'
 
@@ -61,7 +61,7 @@ async function startTask(url: string, title?: string): Promise<{ ok: boolean, ta
   const platform = detectPlatform(url)
   const displayTitle = normalizeVideoTitle(title)
   if (!platform)
-    return { ok: false, error: '当前链接不是支持的视频平台' }
+    return { ok: false, error: '当前链接不是支持的内容平台' }
 
   const settings = await readSettings()
   if (!settings.providerId || !settings.modelName)
@@ -72,7 +72,8 @@ async function startTask(url: string, title?: string): Promise<{ ok: boolean, ta
   // B 站：先在浏览器里抓字幕（带本地登录态 cookie），随提交带过去
   const prefetched = platform === 'bilibili' ? await fetchBilibiliSubtitle(url) : null
 
-  const formats = settings.formats || []
+  const formats = getSupportedFormats(platform, settings.formats || [])
+  const videoFeaturesEnabled = supportsVideoFeatures(platform) && settings.video_understanding
   try {
     const res = await fetch(`${backend}/api/generate_note`, {
       method: 'POST',
@@ -89,9 +90,9 @@ async function startTask(url: string, title?: string): Promise<{ ok: boolean, ta
         link: formats.includes('link'),
         style: settings.style || undefined,
         extras: settings.extras || undefined,
-        video_understanding: settings.video_understanding || undefined,
-        video_interval: settings.video_understanding ? settings.video_interval : undefined,
-        grid_size: settings.video_understanding ? settings.grid_size : undefined,
+        video_understanding: videoFeaturesEnabled || undefined,
+        video_interval: videoFeaturesEnabled ? settings.video_interval : undefined,
+        grid_size: videoFeaturesEnabled ? settings.grid_size : undefined,
         prefetched_transcript: prefetched ?? undefined,
       }),
     })
@@ -132,7 +133,7 @@ async function openSidePanelInTab(tabId?: number) {
 
 // ---------- 消息桥 ----------
 
-onMessage<{ url: string; title?: string }, 'bilinote-start'>('bilinote-start', async ({ data, sender }) => {
+onMessage<{ url: string, title?: string }, 'bilinote-start'>('bilinote-start', async ({ data, sender }) => {
   const result = await startTask(data.url, data.title)
   // 成功就把侧边栏拉起来给用户看进度
   if (result.ok)
@@ -143,13 +144,11 @@ onMessage<{ url: string; title?: string }, 'bilinote-start'>('bilinote-start', a
 // ---------- 安装时事件 ----------
 
 browser.runtime.onInstalled.addListener(() => {
-  console.log('BiliNote extension installed')
-
-  // 右键菜单：在视频页或视频链接上"用 BiliNote 总结"
+  // 右键菜单：在支持的内容页或链接上启动 BiliNote
   try {
     browser.contextMenus.create({
       id: 'bilinote-summarize-page',
-      title: '用 BiliNote 总结此视频',
+      title: '用 BiliNote 总结当前内容',
       contexts: ['page', 'link', 'video'],
       documentUrlPatterns: [
         '*://*.bilibili.com/*',
@@ -157,6 +156,8 @@ browser.runtime.onInstalled.addListener(() => {
         '*://youtu.be/*',
         '*://*.douyin.com/*',
         '*://*.kuaishou.com/*',
+        '*://xiaoyuzhoufm.com/episode/*',
+        '*://www.xiaoyuzhoufm.com/episode/*',
       ],
     })
   }
