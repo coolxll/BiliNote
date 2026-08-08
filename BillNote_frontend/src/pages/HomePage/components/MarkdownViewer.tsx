@@ -25,6 +25,7 @@ import TranscriptViewer from '@/pages/HomePage/components/transcriptViewer.tsx'
 import MarkmapEditor from '@/pages/HomePage/components/MarkmapComponent.tsx'
 import ChatPanel from '@/pages/HomePage/components/ChatPanel.tsx'
 import VideoBanner from '@/pages/HomePage/components/VideoBanner.tsx'
+import TaskLogPanel from '@/pages/HomePage/components/TaskLogPanel.tsx'
 
 interface VersionNote {
   ver_id: string
@@ -466,7 +467,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
 
   if (status === 'loading') {
     return (
-      <div className="flex h-screen w-full flex-col items-center justify-center space-y-5 px-4 text-neutral-500">
+      <div className="flex h-screen w-full flex-col items-center justify-center space-y-5 overflow-y-auto px-4 py-6 text-neutral-500">
         <div className="w-full max-w-4xl">
           <StepBar steps={steps} currentStep={stepStatus} />
         </div>
@@ -498,6 +499,7 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
             </span>
           </div>
         )}
+        <TaskLogPanel key={currentTask?.id} logs={currentTask?.logs} />
         <div className="text-center text-[11px] text-neutral-400">
           任务 ID：{currentTask?.id}
         </div>
@@ -519,16 +521,19 @@ const MarkdownViewer: FC<MarkdownViewerProps> = memo(({ status }) => {
 
   if (status === 'failed' && !isMultiVersion) {
     return (
-      <div className="flex h-screen w-full flex-col items-center justify-center gap-4 space-y-3">
+      <div className="flex h-screen w-full flex-col items-center justify-center gap-4 overflow-y-auto px-4 py-6">
         <Error />
         <div className="text-center">
           <p className="text-lg font-bold text-red-500">笔记生成失败</p>
-          <p className="mt-2 mb-2 text-xs text-red-400">请检查后台或稍后再试</p>
+          <p className="mt-2 mb-2 max-w-xl text-xs text-red-400">
+            {currentTask?.statusMessage || '请检查处理日志或稍后再试'}
+          </p>
 
           <Button onClick={() => retryTask(currentTask.id)} size="lg">
             重试
           </Button>
         </div>
+        <TaskLogPanel key={currentTask?.id} logs={currentTask?.logs} />
       </div>
     )
   }

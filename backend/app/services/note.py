@@ -29,6 +29,7 @@ from app.models.model_config import ModelConfig
 from app.models.notes_model import AudioDownloadResult, NoteResult
 from app.models.transcriber_model import TranscriptResult, TranscriptSegment
 from app.services.constant import SUPPORT_PLATFORM_MAP
+from app.services.task_log import install_task_log_handler
 from app.services.provider import ProviderService
 from app.transcriber.base import Transcriber
 from app.transcriber.transcriber_provider import get_transcriber, _transcribers
@@ -58,6 +59,7 @@ IMAGE_BASE_URL = os.getenv("IMAGE_BASE_URL", "/static/screenshots")
 # 日志配置
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+install_task_log_handler(logger)
 
 
 class NoteGenerator:
@@ -322,7 +324,6 @@ class NoteGenerator:
 
         NOTE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         status_file = NOTE_OUTPUT_DIR / f"{task_id}.status.json"
-        print(f"写入状态文件: {status_file} 当前状态: {status}")
         status_value = status.value if isinstance(status, TaskStatus) else status
         try:
             status_enum = TaskStatus(status_value)
@@ -336,6 +337,13 @@ class NoteGenerator:
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
 
+        logger.info(
+            "任务状态更新 (task_id=%s, status=%s): %s",
+            task_id,
+            status_value,
+            data["message"],
+        )
+
         try:
             # First create a temporary file
             temp_file = status_file.with_suffix('.tmp')
@@ -347,7 +355,6 @@ class NoteGenerator:
             # Atomic rename operation
             temp_file.replace(status_file)
 
-            print(f"状态文件写入成功: {status_file}")
         except Exception as e:
             logger.error(f"写入状态文件失败 (task_id={task_id})：{e}")
             # Try to write error to file directly as fallback

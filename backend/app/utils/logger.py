@@ -2,6 +2,8 @@ import logging
 import sys
 from pathlib import Path
 
+from app.services.task_log import get_task_log_handler
+
 # 日志目录
 LOG_DIR = Path("logs")
 LOG_DIR.mkdir(exist_ok=True)
@@ -28,5 +30,6 @@ def get_logger(name: str) -> logging.Logger:
         logger.setLevel(logging.INFO)
         logger.addHandler(console_handler)
         logger.addHandler(file_handler)
+        logger.addHandler(get_task_log_handler())
         logger.propagate = False
     return logger

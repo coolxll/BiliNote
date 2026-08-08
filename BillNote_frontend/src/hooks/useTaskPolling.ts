@@ -29,12 +29,18 @@ export const useTaskPolling = (interval = 3000) => {
         try {
           const res = await get_task_status(task.id)
           const { status } = res
+          const logs = Array.isArray(res.logs) ? res.logs : []
+          const latestReceivedLog = logs[logs.length - 1]?.timestamp
+          const latestStoredLog = task.logs?.[task.logs.length - 1]?.timestamp
+          const logsChanged =
+            logs.length !== (task.logs?.length || 0) || latestReceivedLog !== latestStoredLog
           const polledAt = new Date().toISOString()
           const statusData = {
             status,
             statusMessage: res.message || undefined,
             statusUpdatedAt: res.updated_at || undefined,
             lastPolledAt: polledAt,
+            logs,
           }
 
           if (
@@ -42,6 +48,7 @@ export const useTaskPolling = (interval = 3000) => {
             (status !== task.status ||
               res.message !== task.statusMessage ||
               res.updated_at !== task.statusUpdatedAt ||
+              logsChanged ||
               !task.lastPolledAt)
           ) {
             if (status === 'SUCCESS') {
@@ -65,6 +72,7 @@ export const useTaskPolling = (interval = 3000) => {
           updateTaskContent(task.id, {
             status: 'FAILED',
             statusMessage: e?.data?.message || e?.msg || '无法获取任务状态',
+            logs: Array.isArray(e?.data?.logs) ? e.data.logs : task.logs,
             lastPolledAt: new Date().toISOString(),
           })
         }
