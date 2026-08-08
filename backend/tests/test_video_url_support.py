@@ -45,6 +45,19 @@ class TestVideoUrlSupport(unittest.TestCase):
 
         self.assertTrue(video_url_validator.is_supported_video_url(url))
 
+    def test_accepts_xiaoyuzhou_episode_url_and_extracts_id(self):
+        episode_id = "69b4d2f9f8b8079bfa3ae7f2"
+        url = f"https://www.xiaoyuzhoufm.com/episode/{episode_id}"
+
+        self.assertTrue(video_url_validator.is_supported_video_url(url))
+        self.assertEqual(url_parser.extract_video_id(url, "xiaoyuzhou"), episode_id)
+
+    def test_rejects_xiaoyuzhou_id_embedded_in_another_host(self):
+        url = "https://example.com/?next=xiaoyuzhoufm.com/episode/69b4d2f9f8b8079bfa3ae7f2"
+
+        self.assertFalse(video_url_validator.is_supported_video_url(url))
+        self.assertIsNone(url_parser.extract_video_id(url, "xiaoyuzhou"))
+
 
 if __name__ == "__main__":
     unittest.main()

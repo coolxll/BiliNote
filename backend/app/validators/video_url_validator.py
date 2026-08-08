@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 SUPPORTED_PLATFORMS = {
     "bilibili": r"(https?://)?(www\.)?bilibili\.com/video/[a-zA-Z0-9]+",
     "youtube": r"(https?://)?(www\.)?(youtube\.com/(watch\?v=|shorts/)|youtu\.be/)[\w\-]+",
+    "xiaoyuzhou": r"https?://(www\.)?xiaoyuzhoufm\.com/episode/[0-9a-fA-F]{24}(?:[/?#].*)?$",
     "douyin": "douyin",
     "kuaishou": "kuaishou"
 }
