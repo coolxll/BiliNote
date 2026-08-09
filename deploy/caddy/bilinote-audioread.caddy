@@ -10,7 +10,10 @@ bilinote.229929605.xyz {
     request_body {
         max_size 10GB
     }
-    reverse_proxy 127.0.0.1:11309
+    reverse_proxy 127.0.0.1:11309 {
+        header_up X-Real-IP {header.Cf-Connecting-IP}
+        header_up X-Forwarded-For {header.Cf-Connecting-IP}
+    }
 }
 
 audioread.229929605.xyz {

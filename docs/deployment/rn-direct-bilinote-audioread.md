@@ -167,6 +167,8 @@ audioread.229929605.xyz {
 Validate before reload:
 
 ```bash
+sudo install -o caddy -g caddy -m 640 /dev/null /var/log/caddy/bilinote.log
+sudo install -o caddy -g caddy -m 640 /dev/null /var/log/caddy/audioread.log
 sudo caddy validate --config /etc/caddy/Caddyfile
 sudo systemctl reload caddy
 sudo systemctl status caddy --no-pager
