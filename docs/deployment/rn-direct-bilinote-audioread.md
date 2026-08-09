@@ -111,7 +111,8 @@ LLM credentials remain managed through the BiliNote provider UI and SQLite datab
 cd /opt/app/bilinote
 docker compose config
 docker compose pull qwen-audioread-api
-docker compose build backend frontend
+docker compose build backend
+docker compose build frontend
 docker compose up -d
 docker compose ps
 ```
@@ -247,7 +248,8 @@ Update only to reviewed commits and immutable AudioRead tags, then run the accep
 
 ```bash
 docker compose pull qwen-audioread-api
-docker compose build backend frontend
+docker compose build backend
+docker compose build frontend
 docker compose up -d
 ```
 

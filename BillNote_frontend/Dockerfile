@@ -9,6 +9,10 @@ FROM ${BASE_REGISTRY}/library/node:20-alpine AS builder
 ARG VITE_APP_VERSION=
 ENV VITE_APP_VERSION=${VITE_APP_VERSION}
 
+# Vite's production bundle needs more than Node's default ~2 GB heap.
+# 3 GB is suitable for the rn-direct 3C4G host when images are built sequentially.
+ENV NODE_OPTIONS=--max-old-space-size=3072
+
 # pnpm pin 到 9.x：lockfile 是 v9 生成；pnpm 11 要求 Node 22+ 与 node:20 不兼容
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
