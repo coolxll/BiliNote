@@ -9,10 +9,17 @@ class ChunkPayload:
 
 
 class RequestChunker:
-    def __init__(self, message_builder: Callable, max_bytes: int, size_estimator: Optional[Callable] = None):
+    def __init__(
+        self,
+        message_builder: Callable,
+        max_bytes: int,
+        size_estimator: Optional[Callable] = None,
+        max_segments: Optional[int] = None,
+    ):
         self.message_builder = message_builder
         self.max_bytes = max_bytes
         self.size_estimator = size_estimator
+        self.max_segments = max_segments if max_segments and max_segments > 0 else None
 
     def estimate(self, messages) -> int:
         if self.size_estimator:
@@ -73,6 +80,8 @@ class RequestChunker:
         while seg_idx < len(segments):
             batch_segments = []
             while seg_idx < len(segments):
+                if self.max_segments is not None and len(batch_segments) >= self.max_segments:
+                    break
                 candidate = batch_segments + [segments[seg_idx]]
                 size = self._messages_size(candidate, [], **kwargs)
                 if size <= self.max_bytes:

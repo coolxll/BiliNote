@@ -6,6 +6,7 @@ import {
     Server,
     Cpu,
     AudioLines,
+    RadioTower,
     Film,
     RefreshCw,
     CheckCircle2,
@@ -206,6 +207,36 @@ export default function Monitor() {
                                     )}
                                 </div>
                             ) : null}
+                        </CardContent>
+                    </Card>
+
+                    {/* Qwen AudioRead */}
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-lg font-medium">
+                                <RadioTower className="mr-2 inline h-5 w-5 text-cyan-600" />
+                                千问音视频速读
+                            </CardTitle>
+                            {status && (
+                                <StatusBadge
+                                    ok={status.audioread.authenticated}
+                                    label={status.audioread.authenticated ? '已连接' : '不可用'}
+                                />
+                            )}
+                        </CardHeader>
+                        <CardContent>
+                            {status && (
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">配置:</span>
+                                        <span>{status.audioread.configured ? '已配置' : '未配置'}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">状态:</span>
+                                        <span className="font-mono">{status.audioread.status}</span>
+                                    </div>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
 

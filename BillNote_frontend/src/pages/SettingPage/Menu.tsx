@@ -4,6 +4,7 @@ import {
   HardDriveDownload,
   Info,
   Activity,
+  Podcast,
 } from 'lucide-react'
 import MenuBar, { IMenuProps } from '@/pages/SettingPage/components/menuBar.tsx'
 
@@ -35,6 +36,12 @@ const Menu = () => {
     //   path: '/settings/prompt',
     // },
     {
+      id: 'xiaoyuzhou',
+      name: '小宇宙账号',
+      icon: <Podcast />,
+      path: '/settings/xiaoyuzhou',
+    },
+    {
       id: 'monitor',
       name: '部署监控',
       icon: <Activity />,
@@ -55,11 +62,11 @@ const Menu = () => {
   ]
   return (
     <div className="flex h-full flex-col">
-      <div className={'flex w-full flex-col gap-2'}>
+      <div className="hidden w-full flex-col gap-2 md:flex">
         <div className="text-2xl font-medium">设置</div>
         <div className="text-sm font-light text-gray-800">全局配置与模型设置</div>
       </div>
-      <div className="mt-6 flex-1">
+      <div className="flex min-w-max gap-1 md:mt-6 md:min-w-0 md:flex-1 md:flex-col">
         {menuList &&
           menuList.map(item => {
             return <MenuBar key={item.id} menuItem={item} />

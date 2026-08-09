@@ -47,6 +47,10 @@ async def lifespan(app: FastAPI):
 
         logger.info("[startup 2/5] init_db() — 初始化 SQLite 数据库")
         init_db()
+        from app.services.task_status import recover_interrupted_tasks
+        recovered_tasks = recover_interrupted_tasks()
+        if recovered_tasks:
+            logger.warning("           已将 %d 个中断任务标记为失败", len(recovered_tasks))
 
         logger.info("[startup 3/5] TranscriberConfigManager — 读取转写器配置")
         # 转写器不再在启动时强制初始化，而是在首次生成笔记时按需创建。

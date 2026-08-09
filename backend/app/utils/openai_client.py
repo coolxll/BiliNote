@@ -35,6 +35,9 @@ def build_openai_client(
     kwargs = {
         "api_key": str(api_key).strip(),
         "base_url": base_url,
+        # SDK 默认还会在内部重试，叠加 UniversalGPT 的外层重试后会让一次
+        # attempt 实际阻塞数分钟。统一关闭，由业务层负责可见、可控的重试。
+        "max_retries": max(0, int(os.getenv("OPENAI_SDK_MAX_RETRIES", "0"))),
         "default_headers": {
             "User-Agent": os.getenv("BILINOTE_OPENAI_USER_AGENT", "BiliNote/2.4.4")
         },

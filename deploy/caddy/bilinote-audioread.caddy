@@ -1,0 +1,33 @@
+bilinote.229929605.xyz {
+    log {
+        output file /var/log/caddy/bilinote.log {
+            roll_size 10mb
+            roll_keep 3
+        }
+        format json
+    }
+    encode zstd gzip
+    request_body {
+        max_size 10GB
+    }
+    reverse_proxy 127.0.0.1:11309
+}
+
+audioread.229929605.xyz {
+    log {
+        output file /var/log/caddy/audioread.log {
+            roll_size 10mb
+            roll_keep 3
+        }
+        format json
+    }
+    encode zstd gzip
+    request_body {
+        max_size 2GB
+    }
+
+    @blocked path /docs* /redoc* /openapi.json /api/v1/transcriptions/local*
+    respond @blocked 404
+
+    reverse_proxy 127.0.0.1:11308
+}

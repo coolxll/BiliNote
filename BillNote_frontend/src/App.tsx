@@ -29,6 +29,7 @@ const Monitor = lazy(() => import('@/pages/SettingPage/Monitor.tsx'))
 const Downloader = lazy(() => import('@/pages/SettingPage/Downloader.tsx'))
 const DownloaderForm = lazy(() => import('@/components/Form/DownloaderForm/Form.tsx'))
 const TranscriberPage = lazy(() => import('@/pages/SettingPage/transcriber.tsx'))
+const XiaoyuzhouSettings = lazy(() => import('@/pages/SettingPage/Xiaoyuzhou.tsx'))
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
 
 function App() {
@@ -82,6 +83,7 @@ function App() {
                   <Route path=":id" element={<DownloaderForm />} />
                 </Route>
                 <Route path="transcriber" element={<TranscriberPage />} />
+                <Route path="xiaoyuzhou" element={<XiaoyuzhouSettings />} />
                 <Route path="monitor" element={<Monitor />}></Route>
                 <Route path="about" element={<AboutPage />}></Route>
                 <Route path="*" element={<NotFoundPage />} />

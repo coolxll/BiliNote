@@ -8,11 +8,11 @@ import {
   FormMessage,
 } from '@/components/ui/form.tsx'
 import { useEffect,useState } from 'react'
-import { useForm, useWatch } from 'react-hook-form'
+import { useForm, useWatch, type FieldErrors } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 
-import { Info, Loader2, Plus } from 'lucide-react'
+import { Info, Loader2, Plus, Search } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert.tsx'
 import { generateNote } from '@/services/note.ts'
 import { uploadFile } from '@/services/upload.ts'
@@ -25,7 +25,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip.tsx'
 import { Checkbox } from '@/components/ui/checkbox.tsx'
-import { ScrollArea } from '@/components/ui/scroll-area.tsx'
 import { Button } from '@/components/ui/button.tsx'
 import {
   Select,
@@ -37,9 +36,9 @@ import {
 import { Input } from '@/components/ui/input.tsx'
 import { Textarea } from '@/components/ui/textarea.tsx'
 import { noteStyles, noteFormats, videoPlatforms } from '@/constant/note.ts'
-import { fetchModels } from '@/services/model.ts'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import XiaoyuzhouSearchDialog from './XiaoyuzhouSearchDialog'
 
 /* -------------------- 校验 Schema -------------------- */
 const formSchema = z
@@ -132,10 +131,11 @@ const NoteForm = () => {
   const navigate = useNavigate();
   const [isUploading, setIsUploading] = useState(false)
   const [uploadSuccess, setUploadSuccess] = useState(false)
+  const [xiaoyuzhouSearchOpen, setXiaoyuzhouSearchOpen] = useState(false)
   /* ---- 全局状态 ---- */
   const { addPendingTask, currentTaskId, setCurrentTask, getCurrentTask, retryTask } =
     useTaskStore()
-  const { loadEnabledModels, modelList, showFeatureHint, setShowFeatureHint } = useModelStore()
+  const { loadEnabledModels, modelList } = useModelStore()
 
   /* ---- 表单 ---- */
   const form = useForm<NoteFormValues>({
@@ -242,11 +242,12 @@ const NoteForm = () => {
     try {
       const data = await generateNote(payload)
       addPendingTask(data.task_id, values.platform, payload)
-    } catch (e: any) {
+    } catch (error: unknown) {
+      const taskError = error as { data?: { reason?: string; downloading?: boolean } }
       // 就绪门禁：本地转写模型还没下载好。后端返回 reason='transcriber_model_not_ready'，
       // 引导用户去「设置 → 音频转写配置」下载，而不是留一个静默失败的任务。
-      if (e?.data?.reason === 'transcriber_model_not_ready') {
-        const downloading = e?.data?.downloading
+      if (taskError.data?.reason === 'transcriber_model_not_ready') {
+        const downloading = taskError.data.downloading
         toast.error(
           downloading
             ? '转写模型正在下载中，请稍候再提交'
@@ -256,7 +257,7 @@ const NoteForm = () => {
         return
       }
       // 其余错误：axios 拦截器已经弹过 toast，这里只兜底不让 promise 变成未处理 rejection
-      console.error('提交任务失败：', e)
+      console.error('提交任务失败：', error)
     }
   }
   const onInvalid = (errors: FieldErrors<NoteFormValues>) => {
@@ -342,13 +343,36 @@ const NoteForm = () => {
               name="video_url"
               render={({ field }) => (
                 <FormItem className="flex-1">
-                  {platform === 'local' ? (
-                    <>
+                  <div className="flex gap-2">
+                    {platform === 'local' ? (
                       <Input disabled={!!editing} placeholder="请输入本地视频路径" {...field} />
-                    </>
-                  ) : (
-                    <Input disabled={!!editing} placeholder="请输入视频网站链接" {...field} />
-                  )}
+                    ) : (
+                      <Input
+                        disabled={!!editing}
+                        placeholder={isAudioOnlyPlatform ? '请输入小宇宙单集链接' : '请输入视频网站链接'}
+                        {...field}
+                      />
+                    )}
+                    {isAudioOnlyPlatform && !editing && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="shrink-0"
+                              aria-label="搜索小宇宙单集"
+                              onClick={() => setXiaoyuzhouSearchOpen(true)}
+                            >
+                              <Search className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>搜索小宇宙单集</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
                   <FormMessage style={{ display: 'none' }} />
                 </FormItem>
               )}
@@ -484,7 +508,7 @@ const NoteForm = () => {
             <FormField
               control={form.control}
               name="video_understanding"
-              render={({ field }) => (
+              render={() => (
                 <FormItem>
                   <div className="flex items-center gap-2">
                     <FormLabel>启用</FormLabel>
@@ -582,6 +606,17 @@ const NoteForm = () => {
           />
         </form>
       </Form>
+      <XiaoyuzhouSearchDialog
+        open={xiaoyuzhouSearchOpen}
+        onOpenChange={setXiaoyuzhouSearchOpen}
+        onSelect={episode => {
+          form.setValue('platform', 'xiaoyuzhou')
+          form.setValue('video_url', episode.episode_url, {
+            shouldDirty: true,
+            shouldValidate: true,
+          })
+        }}
+      />
     </div>
   )
 }

@@ -321,6 +321,10 @@ cython_debug/
 /backend/.idea/*
 /backend/config/*
 /backend/vector_db/
+/deploy/audioread/data/*
+/deploy/audioread/.auth/*
+!/deploy/audioread/data/.gitkeep
+!/deploy/audioread/.auth/.gitkeep
 /BiliNote_frontend/.idea/*
 /BiliNote_frontend/src-tauri/bin/
 
