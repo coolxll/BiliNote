@@ -29,7 +29,7 @@ audioread.229929605.xyz {
         max_size 2GB
     }
 
-    @blocked path /docs* /redoc* /openapi.json /api/v1/transcriptions/local*
+    @blocked path /ready /docs* /redoc* /openapi.json /api/v1/transcriptions/local*
     respond @blocked 404
 
     reverse_proxy 127.0.0.1:11308

@@ -535,6 +535,18 @@ async def _get_audioread_status() -> dict:
 
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
+            readiness = await client.get(f"{base_url}/ready")
+            if readiness.status_code != 200:
+                try:
+                    reason = str(readiness.json().get("reason") or f"http_{readiness.status_code}")
+                except Exception:
+                    reason = f"http_{readiness.status_code}"
+                return {
+                    "configured": True,
+                    "reachable": True,
+                    "authenticated": False,
+                    "status": reason,
+                }
             response = await client.get(
                 f"{base_url}/api/v1/jobs",
                 params={"limit": 1},
