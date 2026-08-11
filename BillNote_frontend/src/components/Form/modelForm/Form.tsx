@@ -220,12 +220,12 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
   if (loading) return <div className="p-4">加载中...</div>
 
   return (
-    <div className="flex flex-col gap-8 p-4">
+    <div className="flex w-full flex-col gap-8 p-4 pb-8">
       {/* Provider信息表单 */}
       <Form {...providerForm}>
         <form
           onSubmit={providerForm.handleSubmit(onProviderSubmit)}
-          className="flex max-w-xl flex-col gap-4"
+          className="flex w-full max-w-xl flex-col gap-4"
         >
           <div className="text-lg font-bold">
             {isEditMode ? '编辑模型供应商' : '新增模型供应商'}
@@ -239,10 +239,10 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
             control={providerForm.control}
             name="name"
             render={({ field }) => (
-              <FormItem className="flex items-center gap-4">
-                <FormLabel className="w-24 text-right">名称</FormLabel>
+              <FormItem className="flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
+                <FormLabel className="w-auto md:w-24 md:text-right">名称</FormLabel>
                 <FormControl>
-                  <Input {...field} disabled={isBuiltIn} className="flex-1" />
+                  <Input {...field} disabled={isBuiltIn} className="h-11 flex-1 md:h-9" />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -252,10 +252,10 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
             control={providerForm.control}
             name="apiKey"
             render={({ field }) => (
-              <FormItem className="flex items-center gap-4">
-                <FormLabel className="w-24 text-right">API Key</FormLabel>
+              <FormItem className="flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
+                <FormLabel className="w-auto md:w-24 md:text-right">API Key</FormLabel>
                 <FormControl>
-                  <Input {...field} className="flex-1" />
+                  <Input {...field} className="h-11 flex-1 md:h-9" />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -265,12 +265,18 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
             control={providerForm.control}
             name="baseUrl"
             render={({ field }) => (
-              <FormItem className="flex items-center gap-4">
-                <FormLabel className="w-24 text-right">API地址</FormLabel>
+              <FormItem className="flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
+                <FormLabel className="w-auto md:w-24 md:text-right">API地址</FormLabel>
                 <FormControl>
-                  <Input {...field} className="flex-1" />
+                  <Input {...field} className="h-11 flex-1 md:h-9" />
                 </FormControl>
-                <Button type="button" onClick={handleTest} variant="ghost" disabled={testing}>
+                <Button
+                  type="button"
+                  onClick={handleTest}
+                  variant="outline"
+                  className="h-11 w-full md:h-9 md:w-auto"
+                  disabled={testing}
+                >
                   {testing ? '测试中...' : '测试连通性'}
                 </Button>
                 <FormMessage />
@@ -281,17 +287,21 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
             control={providerForm.control}
             name="type"
             render={({ field }) => (
-              <FormItem className="flex items-center gap-4">
-                <FormLabel className="w-24 text-right">类型</FormLabel>
+              <FormItem className="flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
+                <FormLabel className="w-auto md:w-24 md:text-right">类型</FormLabel>
                 <FormControl>
-                  <Input {...field} disabled className="flex-1" />
+                  <Input {...field} disabled className="h-11 flex-1 md:h-9" />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
           <div className="pt-2">
-            <Button type="submit" disabled={!providerForm.formState.isDirty}>
+            <Button
+              type="submit"
+              className="h-11 w-full md:h-9 md:w-auto"
+              disabled={!providerForm.formState.isDirty}
+            >
               {isEditMode ? '保存修改' : '保存创建'}
             </Button>
           </div>
@@ -299,7 +309,7 @@ const ProviderForm = ({ isCreate = false }: { isCreate?: boolean }) => {
       </Form>
 
       {/* 模型信息表单 */}
-      <div className="flex max-w-xl flex-col gap-4">
+      <div className="flex w-full max-w-xl flex-col gap-4">
         <div className="flex flex-col gap-2">
           <span className="font-bold">模型列表</span>
           <div className={'flex flex-col gap-2 rounded bg-[#FEF0F0] p-2.5'}>

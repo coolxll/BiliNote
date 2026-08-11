@@ -22,6 +22,7 @@ from app.services.task_log import (
     reset_task_logs,
     task_log_context,
 )
+from app.services.task_status import update_task_status
 from app.utils.response import ResponseWrapper as R
 from app.utils.url_parser import extract_video_id
 from app.validators.video_url_validator import is_supported_video_url
@@ -147,20 +148,24 @@ def run_note_task(task_id: str, video_url: str, platform: str, quality: Download
             )
 
     with task_log_context(task_id):
-        logger.info(f"任务进入执行队列 (task_id={task_id})")
-        note = task_executor.run(_execute_note_task)
-        logger.info(f"Note generated: {task_id}")
-        if not note or not note.markdown:
-            logger.warning(f"任务 {task_id} 执行失败，跳过保存")
-            return
-        save_note_to_file(task_id, note)
-
-        # 自动建立向量索引（用于 AI 问答），失败不影响笔记生成
         try:
-            from app.services.vector_store import VectorStoreManager
-            VectorStoreManager().index_task(task_id)
-        except Exception as e:
-            logger.warning(f"向量索引失败（不影响笔记）: {e}")
+            logger.info(f"任务进入执行队列 (task_id={task_id})")
+            note = task_executor.run(_execute_note_task)
+            logger.info(f"Note generated: {task_id}")
+            if not note or not note.markdown:
+                logger.warning(f"任务 {task_id} 执行失败，跳过保存")
+                return
+            save_note_to_file(task_id, note)
+
+            # 自动建立向量索引（用于 AI 问答），失败不影响笔记生成
+            try:
+                from app.services.vector_store import VectorStoreManager
+                VectorStoreManager().index_task(task_id)
+            except Exception as e:
+                logger.warning(f"向量索引失败（不影响笔记）: {e}")
+        except Exception as exc:
+            logger.exception("后台任务异常 (task_id=%s)", task_id)
+            update_task_status(task_id, TaskStatus.FAILED, message=str(exc))
 
 
 @router.post('/delete_task')
@@ -188,6 +193,13 @@ async def upload(file: UploadFile = File(...)):
 @router.post("/generate_note")
 def generate_note(data: VideoRequest, background_tasks: BackgroundTasks):
     try:
+        if data.platform in {"apple_podcasts", "xiaoyuzhou"}:
+            data.screenshot = False
+            data.link = False
+            data.video_understanding = False
+            data.format = [
+                value for value in (data.format or []) if value not in {"link", "screenshot"}
+            ]
         # 就绪门禁：本地转写引擎（fast-whisper / mlx-whisper）必须等模型下载完才能跑视频，
         # 否则任务会卡在首次下载（慢 / OOM / 截断），用户只看到一个静默失败的任务。
         # 客户端已抓好字幕（prefetched_transcript）则不需要转写，跳过检查。
@@ -228,7 +240,7 @@ def generate_note(data: VideoRequest, background_tasks: BackgroundTasks):
         append_task_log(task_id, "任务已提交，等待后台处理")
 
         # 统一先写入 PENDING，表示已进入后台执行队列
-        NoteGenerator()._update_status(task_id, TaskStatus.PENDING)
+        update_task_status(task_id, TaskStatus.PENDING)
 
         # 客户端已经抓好字幕的话，写到转写缓存文件，NoteGenerator 的 cache-hit 逻辑会直接用上
         if data.prefetched_transcript:
@@ -283,17 +295,24 @@ def get_task_status(task_id: str):
                 })
 
         if status == TaskStatus.FAILED.value:
-            return R.error(
-                message or "任务失败",
-                code=500,
-                data={
-                    "status": status,
-                    "message": message or "任务失败",
-                    "logs": task_logs,
-                    "updated_at": status_content.get("updated_at"),
-                    "task_id": task_id,
-                },
-            )
+            failure_data = {
+                "status": status,
+                "message": message or "任务失败",
+                "logs": task_logs,
+                "updated_at": status_content.get("updated_at"),
+                "task_id": task_id,
+                "has_result": False,
+            }
+            if os.path.exists(result_path):
+                try:
+                    with open(result_path, "r", encoding="utf-8") as rf:
+                        failure_data["result"] = json.load(rf)
+                    failure_data["has_result"] = True
+                except (OSError, json.JSONDecodeError):
+                    logger.warning("任务失败且旧结果文件无法读取 (task_id=%s)", task_id)
+
+            # FAILED 是任务业务状态，不是 task_status 接口本身调用失败。
+            return R.success(failure_data)
 
         # 处理中状态
         return R.success({

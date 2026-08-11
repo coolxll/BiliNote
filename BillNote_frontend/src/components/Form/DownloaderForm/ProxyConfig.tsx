@@ -69,7 +69,7 @@ const ProxyConfig = () => {
         value={url}
         disabled={!enabled}
         onChange={e => setUrl(e.target.value)}
-        className="text-sm"
+        className="h-11 text-sm md:h-9"
       />
       {fromEnv && (
         <p className="text-xs text-amber-600">
@@ -79,7 +79,7 @@ const ProxyConfig = () => {
       {enabled && effective && (
         <p className="text-xs text-green-600">当前生效：{effective}</p>
       )}
-      <Button size="sm" onClick={handleSave} disabled={saving}>
+      <Button className="h-11 md:h-9" size="sm" onClick={handleSave} disabled={saving}>
         {saving ? '保存中…' : '保存代理配置'}
       </Button>
     </div>

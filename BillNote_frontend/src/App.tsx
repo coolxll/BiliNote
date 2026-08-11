@@ -13,6 +13,8 @@ import { HomePage } from './pages/HomePage/Home.tsx'
 // 非首屏页面使用 React.lazy 按需加载
 const Onboarding = lazy(() => import('@/pages/Onboarding'))
 const SettingPage = lazy(() => import('./pages/SettingPage/index.tsx'))
+const PodcastsPage = lazy(() => import('./pages/Podcasts/PodcastsPage.tsx'))
+const PodcastShowPage = lazy(() => import('./pages/Podcasts/PodcastShowPage.tsx'))
 
 // 桌面端首启引导守卫：未完成 onboarding 时强制跳到 /onboarding
 function OnboardingGuard({ children }: { children: React.ReactNode }) {
@@ -29,6 +31,7 @@ const Monitor = lazy(() => import('@/pages/SettingPage/Monitor.tsx'))
 const Downloader = lazy(() => import('@/pages/SettingPage/Downloader.tsx'))
 const DownloaderForm = lazy(() => import('@/components/Form/DownloaderForm/Form.tsx'))
 const TranscriberPage = lazy(() => import('@/pages/SettingPage/transcriber.tsx'))
+const XiaoyuzhouSettings = lazy(() => import('@/pages/SettingPage/Xiaoyuzhou.tsx'))
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
 
 function App() {
@@ -72,6 +75,8 @@ function App() {
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/" element={<OnboardingGuard><Index /></OnboardingGuard>}>
               <Route index element={<HomePage />} />
+              <Route path="podcasts" element={<PodcastsPage />} />
+              <Route path="podcasts/:source/:podcastId" element={<PodcastShowPage />} />
               <Route path="settings" element={<SettingPage />}>
                 <Route index element={<Navigate to="model" replace />} />
                 <Route path="model" element={<Model />}>
@@ -82,6 +87,7 @@ function App() {
                   <Route path=":id" element={<DownloaderForm />} />
                 </Route>
                 <Route path="transcriber" element={<TranscriberPage />} />
+                <Route path="xiaoyuzhou" element={<XiaoyuzhouSettings />} />
                 <Route path="monitor" element={<Monitor />}></Route>
                 <Route path="about" element={<AboutPage />}></Route>
                 <Route path="*" element={<NotFoundPage />} />

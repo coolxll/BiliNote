@@ -92,6 +92,23 @@ class TestRequestChunker(unittest.TestCase):
         groups = chunker.group_texts_by_budget(["aaaaa", "bbbbb", "ccccc"], build_text_messages)
         self.assertEqual(groups, [["aaaaa", "bbbbb"], ["ccccc"]])
 
+    def test_chunk_respects_segment_count_limit(self):
+        segments = [DummySeg(index, index + 1, str(index)) for index in range(7)]
+        chunker = RequestChunker(
+            build_messages,
+            max_bytes=100,
+            size_estimator=size_estimator,
+            max_segments=3,
+        )
+
+        chunks = chunker.chunk(segments, [])
+
+        self.assertEqual([len(chunk.segments) for chunk in chunks], [3, 3, 1])
+        self.assertEqual(
+            [segment.text for chunk in chunks for segment in chunk.segments],
+            [str(index) for index in range(7)],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

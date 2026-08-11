@@ -54,6 +54,16 @@ export interface Markdown {
   created_at: string
 }
 
+export const hasUsableMarkdown = (markdown: string | Markdown[] | undefined) => {
+  if (Array.isArray(markdown)) {
+    return markdown.some(version => Boolean(version.content?.trim()))
+  }
+  if (typeof markdown !== 'string') return false
+
+  const value = markdown.trim()
+  return Boolean(value) && !['loading', 'empty'].includes(value.toLowerCase())
+}
+
 export interface Task {
   id: string
   markdown: string|Markdown [] //为了兼容之前的笔记

@@ -22,8 +22,9 @@ function readAppVersion() {
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
+  const isDockerBuild = process.env.DOCKER_BUILD === 'true'
   // 在 Docker 环境中，父目录可能没有 .env 文件，使用当前目录
-  const envDir = process.env.DOCKER_BUILD ? __dirname : path.resolve(__dirname, '../')
+  const envDir = isDockerBuild ? __dirname : path.resolve(__dirname, '../')
   const env = loadEnv(mode, envDir)
 
   const apiBaseUrl = env.VITE_API_BASE_URL || 'http://127.0.0.1:8483'
@@ -31,7 +32,7 @@ export default defineConfig(({ mode }) => {
   const appVersion = env.VITE_APP_VERSION || process.env.VITE_APP_VERSION || readAppVersion()
 
   return {
-    base: './',
+    base: isDockerBuild ? '/' : './',
     define: {
       __APP_VERSION__: JSON.stringify(appVersion),
     },

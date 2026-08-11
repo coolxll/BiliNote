@@ -1,15 +1,14 @@
 import { useEffect, useRef } from 'react'
-import { useTaskStore } from '@/store/taskStore'
+import { hasUsableMarkdown, useTaskStore } from '@/store/taskStore'
 import { get_task_status } from '@/services/note.ts'
 import toast from 'react-hot-toast'
 
 export const useTaskPolling = (interval = 3000) => {
   const tasks = useTaskStore(state => state.tasks)
   const updateTaskContent = useTaskStore(state => state.updateTaskContent)
-  const updateTaskStatus = useTaskStore(state => state.updateTaskStatus)
-  const removeTask = useTaskStore(state => state.removeTask)
 
   const tasksRef = useRef(tasks)
+  const verifiedFailedTasksRef = useRef(new Set<string>())
 
   // 每次 tasks 更新，把最新的 tasks 同步进去
   useEffect(() => {
@@ -18,9 +17,11 @@ export const useTaskPolling = (interval = 3000) => {
 
   useEffect(() => {
     const timer = setInterval(async () => {
-      const pendingTasks = tasksRef.current.filter(
-        task => task.status != 'SUCCESS' && task.status != 'FAILED'
-      )
+      const pendingTasks = tasksRef.current.filter(task => {
+        if (task.status === 'SUCCESS') return false
+        if (task.status !== 'FAILED') return true
+        return !verifiedFailedTasksRef.current.has(task.id)
+      })
 
       // 无活跃任务时跳过轮询
       if (pendingTasks.length === 0) return
@@ -42,6 +43,12 @@ export const useTaskPolling = (interval = 3000) => {
             lastPolledAt: polledAt,
             logs,
           }
+          const hasExistingResult = hasUsableMarkdown(task.markdown)
+          const recoverableResult = !hasExistingResult && res.result?.markdown
+
+          if (status === 'FAILED') {
+            verifiedFailedTasksRef.current.add(task.id)
+          }
 
           if (
             status &&
@@ -49,9 +56,11 @@ export const useTaskPolling = (interval = 3000) => {
               res.message !== task.statusMessage ||
               res.updated_at !== task.statusUpdatedAt ||
               logsChanged ||
-              !task.lastPolledAt)
+              !task.lastPolledAt ||
+              recoverableResult)
           ) {
             if (status === 'SUCCESS') {
+              verifiedFailedTasksRef.current.delete(task.id)
               const { markdown, transcript, audio_meta } = res.result
               toast.success('笔记生成成功')
               updateTaskContent(task.id, {
@@ -61,18 +70,38 @@ export const useTaskPolling = (interval = 3000) => {
                 audioMeta: audio_meta,
               })
             } else if (status === 'FAILED') {
-              updateTaskContent(task.id, statusData)
+              updateTaskContent(task.id, {
+                ...statusData,
+                ...(recoverableResult
+                  ? {
+                      markdown: res.result.markdown,
+                      transcript: res.result.transcript,
+                      audioMeta: res.result.audio_meta,
+                    }
+                  : {}),
+              })
+              toast.error(
+                hasExistingResult || recoverableResult
+                  ? '本次重新生成失败，已保留上一次成功结果'
+                  : res.message || '笔记生成失败',
+              )
               console.warn(`⚠️ 任务 ${task.id} 失败`)
             } else {
               updateTaskContent(task.id, statusData)
             }
           }
-        } catch (e) {
-          console.error('❌ 任务轮询失败：', e)
+        } catch (error: unknown) {
+          const pollingError = error as {
+            data?: { message?: string; logs?: unknown[] }
+            msg?: string
+          }
+          console.warn('任务状态查询暂时失败，将继续重试：', pollingError)
           updateTaskContent(task.id, {
-            status: 'FAILED',
-            statusMessage: e?.data?.message || e?.msg || '无法获取任务状态',
-            logs: Array.isArray(e?.data?.logs) ? e.data.logs : task.logs,
+            statusMessage:
+              pollingError.data?.message || pollingError.msg || '状态查询暂时失败，将自动重试',
+            logs: Array.isArray(pollingError.data?.logs)
+              ? pollingError.data.logs
+              : task.logs,
             lastPolledAt: new Date().toISOString(),
           })
         }
@@ -80,5 +109,5 @@ export const useTaskPolling = (interval = 3000) => {
     }, interval)
 
     return () => clearInterval(timer)
-  }, [interval])
+  }, [interval, updateTaskContent])
 }

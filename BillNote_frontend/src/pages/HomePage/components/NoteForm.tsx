@@ -8,11 +8,11 @@ import {
   FormMessage,
 } from '@/components/ui/form.tsx'
 import { useEffect,useState } from 'react'
-import { useForm, useWatch } from 'react-hook-form'
+import { useForm, useWatch, type FieldErrors } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 
-import { Info, Loader2, Plus } from 'lucide-react'
+import { Info, Loader2, Plus, Search } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert.tsx'
 import { generateNote } from '@/services/note.ts'
 import { uploadFile } from '@/services/upload.ts'
@@ -25,7 +25,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip.tsx'
 import { Checkbox } from '@/components/ui/checkbox.tsx'
-import { ScrollArea } from '@/components/ui/scroll-area.tsx'
 import { Button } from '@/components/ui/button.tsx'
 import {
   Select,
@@ -37,9 +36,9 @@ import {
 import { Input } from '@/components/ui/input.tsx'
 import { Textarea } from '@/components/ui/textarea.tsx'
 import { noteStyles, noteFormats, videoPlatforms } from '@/constant/note.ts'
-import { fetchModels } from '@/services/model.ts'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import XiaoyuzhouSearchDialog from './XiaoyuzhouSearchDialog'
 
 /* -------------------- 校验 Schema -------------------- */
 const formSchema = z
@@ -111,9 +110,9 @@ const CheckboxGroup = ({
   onChange: (v: string[]) => void
   disabledMap: Record<string, boolean>
 }) => (
-  <div className="flex flex-wrap space-x-1.5">
+  <div className="flex flex-wrap gap-x-4 gap-y-3">
     {noteFormats.map(({ label, value: v }) => (
-      <label key={v} className="flex items-center space-x-2">
+      <label key={v} className="flex min-h-11 items-center gap-2 md:min-h-0">
         <Checkbox
           checked={value.includes(v)}
           disabled={disabledMap[v]}
@@ -130,18 +129,28 @@ const CheckboxGroup = ({
 /* -------------------- 主组件 -------------------- */
 const NoteForm = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams()
+  const podcastPrefillSource = searchParams.get('platform')
+  const podcastPrefillUrl = searchParams.get('video_url')
+  const isPodcastPrefill = searchParams.get('from') === 'podcasts'
   const [isUploading, setIsUploading] = useState(false)
   const [uploadSuccess, setUploadSuccess] = useState(false)
+  const [xiaoyuzhouSearchOpen, setXiaoyuzhouSearchOpen] = useState(false)
   /* ---- 全局状态 ---- */
   const { addPendingTask, currentTaskId, setCurrentTask, getCurrentTask, retryTask } =
     useTaskStore()
-  const { loadEnabledModels, modelList, showFeatureHint, setShowFeatureHint } = useModelStore()
+  const { loadEnabledModels, modelList } = useModelStore()
 
   /* ---- 表单 ---- */
   const form = useForm<NoteFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      platform: 'bilibili',
+      platform:
+        isPodcastPrefill
+        && (podcastPrefillSource === 'apple_podcasts' || podcastPrefillSource === 'xiaoyuzhou')
+          ? podcastPrefillSource
+          : 'bilibili',
+      video_url: isPodcastPrefill ? podcastPrefillUrl || '' : '',
       quality: 'medium',
       model_name: modelList[0]?.model_name || '',
       style: 'minimal',
@@ -155,7 +164,7 @@ const NoteForm = () => {
   /* ---- 派生状态（只 watch 一次，提高性能） ---- */
   const platform = useWatch({ control: form.control, name: 'platform' }) as string
   const videoUnderstandingEnabled = useWatch({ control: form.control, name: 'video_understanding' })
-  const isAudioOnlyPlatform = platform === 'xiaoyuzhou'
+  const isAudioOnlyPlatform = platform === 'xiaoyuzhou' || platform === 'apple_podcasts'
   const editing = currentTask && currentTask.id
 
   const goModelAdd = () => {
@@ -203,6 +212,32 @@ const NoteForm = () => {
       (form.getValues('format') || []).filter(value => !['link', 'screenshot'].includes(value)),
     )
   }, [form, isAudioOnlyPlatform])
+  useEffect(() => {
+    if (
+      !isPodcastPrefill
+      || !podcastPrefillUrl
+      || (podcastPrefillSource !== 'apple_podcasts' && podcastPrefillSource !== 'xiaoyuzhou')
+    ) return
+    setCurrentTask(null)
+    const currentValues = form.getValues()
+    form.reset({
+      ...currentValues,
+      platform: podcastPrefillSource,
+      video_url: podcastPrefillUrl,
+      video_understanding: false,
+      screenshot: false,
+      link: false,
+      format: (currentValues.format || []).filter(
+        value => !['link', 'screenshot'].includes(value),
+      ),
+    })
+  }, [
+    form,
+    isPodcastPrefill,
+    podcastPrefillSource,
+    podcastPrefillUrl,
+    setCurrentTask,
+  ])
 
   /* ---- 帮助函数 ---- */
   const isGenerating = () => !['SUCCESS', 'FAILED', undefined].includes(getCurrentTask()?.status)
@@ -242,11 +277,12 @@ const NoteForm = () => {
     try {
       const data = await generateNote(payload)
       addPendingTask(data.task_id, values.platform, payload)
-    } catch (e: any) {
+    } catch (error: unknown) {
+      const taskError = error as { data?: { reason?: string; downloading?: boolean } }
       // 就绪门禁：本地转写模型还没下载好。后端返回 reason='transcriber_model_not_ready'，
       // 引导用户去「设置 → 音频转写配置」下载，而不是留一个静默失败的任务。
-      if (e?.data?.reason === 'transcriber_model_not_ready') {
-        const downloading = e?.data?.downloading
+      if (taskError.data?.reason === 'transcriber_model_not_ready') {
+        const downloading = taskError.data.downloading
         toast.error(
           downloading
             ? '转写模型正在下载中，请稍候再提交'
@@ -256,7 +292,7 @@ const NoteForm = () => {
         return
       }
       // 其余错误：axios 拦截器已经弹过 toast，这里只兜底不让 promise 变成未处理 rejection
-      console.error('提交任务失败：', e)
+      console.error('提交任务失败：', error)
     }
   }
   const onInvalid = (errors: FieldErrors<NoteFormValues>) => {
@@ -272,10 +308,10 @@ const NoteForm = () => {
     const label = generating ? '正在生成…' : editing ? '重新生成' : '生成笔记'
 
     return (
-      <div className="flex gap-2">
+      <div className="absolute right-0 bottom-0 left-0 z-20 flex gap-2 border-t border-neutral-200 bg-white/95 px-4 py-3 backdrop-blur md:static md:border-0 md:bg-transparent md:p-0">
         <Button
           type="submit"
-          className={!editing ? 'w-full' : 'w-2/3' + ' bg-primary'}
+          className={`${editing ? 'flex-1 bg-primary' : 'w-full'} h-11 md:h-9`}
           disabled={generating}
         >
           {generating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -283,7 +319,12 @@ const NoteForm = () => {
         </Button>
 
         {editing && (
-          <Button type="button" variant="outline" className="w-1/3" onClick={handleCreateNew}>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 shrink-0 md:h-9"
+            onClick={handleCreateNew}
+          >
             <Plus className="mr-2 h-4 w-4" />
             新建笔记
           </Button>
@@ -294,15 +335,15 @@ const NoteForm = () => {
 
   /* -------------------- 渲染 -------------------- */
   return (
-    <div className="h-full w-full">
+    <div className="relative h-full w-full overflow-y-auto bg-white px-4 pb-4 md:overflow-visible md:px-0 md:pb-0">
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4">
+        <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4 pb-24 md:pb-0">
           {/* 顶部按钮 */}
           <FormButton></FormButton>
 
           {/* 视频链接 & 平台 */}
-          <SectionHeader title="视频链接" tip="支持 B 站、YouTube 等平台" />
-          <div className="flex gap-2">
+          <SectionHeader title="内容链接" tip="支持视频平台和公开 Podcast 单集" />
+          <div className="flex flex-col gap-2 sm:flex-row">
             {/* 平台选择 */}
 
             <FormField
@@ -317,7 +358,7 @@ const NoteForm = () => {
                     defaultValue={field.value}
                   >
                     <FormControl>
-                      <SelectTrigger className="w-32">
+                      <SelectTrigger className="!h-11 w-full sm:!h-9 sm:w-32">
                         <SelectValue />
                       </SelectTrigger>
                     </FormControl>
@@ -342,13 +383,43 @@ const NoteForm = () => {
               name="video_url"
               render={({ field }) => (
                 <FormItem className="flex-1">
-                  {platform === 'local' ? (
-                    <>
+                  <div className="flex gap-2">
+                    {platform === 'local' ? (
                       <Input disabled={!!editing} placeholder="请输入本地视频路径" {...field} />
-                    </>
-                  ) : (
-                    <Input disabled={!!editing} placeholder="请输入视频网站链接" {...field} />
-                  )}
+                    ) : (
+                      <Input
+                        disabled={!!editing}
+                        placeholder={
+                          platform === 'apple_podcasts'
+                            ? '请输入 Apple Podcasts 单集链接'
+                            : isAudioOnlyPlatform
+                              ? '请输入小宇宙单集链接'
+                              : '请输入视频网站链接'
+                        }
+                        className="h-11 md:h-9"
+                        {...field}
+                      />
+                    )}
+                    {platform === 'xiaoyuzhou' && !editing && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="h-11 w-11 shrink-0 md:h-9 md:w-9"
+                              aria-label="搜索小宇宙单集"
+                              onClick={() => setXiaoyuzhouSearchOpen(true)}
+                            >
+                              <Search className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>搜索小宇宙单集</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
                   <FormMessage style={{ display: 'none' }} />
                 </FormItem>
               )}
@@ -363,7 +434,7 @@ const NoteForm = () => {
                 {platform === 'local' && (
                   <>
                     <div
-                      className="hover:border-primary mt-2 flex h-40 cursor-pointer items-center justify-center rounded-md border-2 border-dashed border-gray-300 transition-colors"
+                      className="hover:border-primary mt-2 flex h-32 cursor-pointer items-center justify-center rounded-md border-2 border-dashed border-gray-300 transition-colors md:h-40"
                       onDragOver={e => {
                         e.preventDefault()
                         e.stopPropagation()
@@ -401,7 +472,7 @@ const NoteForm = () => {
               </FormItem>
             )}
           />
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {/* 模型选择 */}
             {
 
@@ -421,7 +492,7 @@ const NoteForm = () => {
                      defaultValue={field.value}
                    >
                      <FormControl>
-                       <SelectTrigger className="w-full min-w-0 truncate">
+                       <SelectTrigger className="!h-11 w-full min-w-0 truncate md:!h-9">
                          <SelectValue />
                        </SelectTrigger>
                      </FormControl>
@@ -461,7 +532,7 @@ const NoteForm = () => {
                     defaultValue={field.value}
                   >
                     <FormControl>
-                      <SelectTrigger className="w-full min-w-0 truncate">
+                      <SelectTrigger className="!h-11 w-full min-w-0 truncate md:!h-9">
                         <SelectValue />
                       </SelectTrigger>
                     </FormControl>
@@ -484,7 +555,7 @@ const NoteForm = () => {
             <FormField
               control={form.control}
               name="video_understanding"
-              render={({ field }) => (
+              render={() => (
                 <FormItem>
                   <div className="flex items-center gap-2">
                     <FormLabel>启用</FormLabel>
@@ -499,7 +570,7 @@ const NoteForm = () => {
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {/* 采样间隔 */}
               <FormField
                 control={form.control}
@@ -507,7 +578,12 @@ const NoteForm = () => {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>采样间隔（秒）</FormLabel>
-                    <Input disabled={!videoUnderstandingEnabled} type="number" {...field} />
+                    <Input
+                      disabled={!videoUnderstandingEnabled}
+                      type="number"
+                      className="h-11 md:h-9"
+                      {...field}
+                    />
                     <FormMessage />
                   </FormItem>
                 )}
@@ -525,7 +601,7 @@ const NoteForm = () => {
                         type="number"
                         value={field.value?.[0] || 3}
                         onChange={e => field.onChange([+e.target.value, field.value?.[1] || 3])}
-                        className="w-16"
+                        className="h-11 w-20 md:h-9 md:w-16"
                       />
                       <span>x</span>
                       <Input
@@ -533,7 +609,7 @@ const NoteForm = () => {
                         type="number"
                         value={field.value?.[1] || 3}
                         onChange={e => field.onChange([field.value?.[0] || 3, +e.target.value])}
-                        className="w-16"
+                        className="h-11 w-20 md:h-9 md:w-16"
                       />
                     </div>
                     <FormMessage />
@@ -582,6 +658,17 @@ const NoteForm = () => {
           />
         </form>
       </Form>
+      <XiaoyuzhouSearchDialog
+        open={xiaoyuzhouSearchOpen}
+        onOpenChange={setXiaoyuzhouSearchOpen}
+        onSelect={episode => {
+          form.setValue('platform', 'xiaoyuzhou')
+          form.setValue('video_url', episode.episode_url, {
+            shouldDirty: true,
+            shouldValidate: true,
+          })
+        }}
+      />
     </div>
   )
 }

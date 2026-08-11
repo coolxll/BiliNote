@@ -1,6 +1,7 @@
 /* -------------------- 常量 -------------------- */
 import {
   BiliBiliLogo,
+  ApplePodcastsLogo,
   DouyinLogo,
   KuaishouLogo,
   LocalLogo,
@@ -32,6 +33,7 @@ export const videoPlatforms = [
   { label: 'YouTube', value: 'youtube', logo: YoutubeLogo },
   { label: '抖音', value: 'douyin', logo: DouyinLogo },
   { label: '快手', value: 'kuaishou', logo: KuaishouLogo },
+  { label: 'Apple Podcasts', value: 'apple_podcasts', logo: ApplePodcastsLogo },
   { label: '小宇宙', value: 'xiaoyuzhou', logo: XiaoyuzhouLogo },
   { label: '本地视频', value: 'local', logo: LocalLogo },
 ] as const

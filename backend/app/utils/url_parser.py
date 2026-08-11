@@ -1,6 +1,6 @@
 import re
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import requests
 
@@ -40,6 +40,24 @@ def extract_video_id(url: str, platform: str) -> Optional[str]:
             return None
         match = re.fullmatch(r"/episode/([0-9a-fA-F]{24})/?", parsed.path)
         return match.group(1) if match else None
+
+    elif platform == "apple_podcasts":
+        parsed = urlparse(url)
+        parts = [part for part in parsed.path.split("/") if part]
+        episode_ids = parse_qs(parsed.query, keep_blank_values=True).get("i", [])
+        if (
+            parsed.scheme == "https"
+            and parsed.netloc == "podcasts.apple.com"
+            and len(parts) == 4
+            and parts[0].lower() in {"cn", "us"}
+            and parts[1] == "podcast"
+            and parts[-1].startswith("id")
+            and parts[-1][2:].isdigit()
+            and len(episode_ids) == 1
+            and episode_ids[0].isdigit()
+        ):
+            return episode_ids[0]
+        return None
 
     return None
 

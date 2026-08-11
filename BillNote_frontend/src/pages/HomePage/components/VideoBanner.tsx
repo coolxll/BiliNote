@@ -12,6 +12,7 @@ const platformLabel: Record<string, string> = {
   youtube: 'YouTube',
   douyin: '抖音',
   xiaoyuzhou: '小宇宙',
+  apple_podcasts: 'Apple Podcasts',
   xiaohongshu: '小红书',
 }
 
@@ -46,14 +47,14 @@ export default function VideoBanner({ audioMeta, videoUrl }: VideoBannerProps) {
       </div>
 
       {/* 内容层 */}
-      <div className="relative flex items-center gap-4 px-5 py-4">
+      <div className="relative flex items-center gap-3 px-3 py-3 sm:gap-4 sm:px-5 sm:py-4">
         {/* 封面缩略图 */}
         {coverUrl && (
           <img
             src={coverUrl}
             alt={title}
             referrerPolicy="no-referrer"
-            className="h-16 w-28 shrink-0 rounded-md object-cover shadow-md"
+            className="h-14 w-20 shrink-0 rounded-md object-cover shadow-md sm:h-16 sm:w-28"
           />
         )}
 
@@ -75,10 +76,10 @@ export default function VideoBanner({ audioMeta, videoUrl }: VideoBannerProps) {
             href={originalUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex shrink-0 items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-white/25"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-white/25 sm:h-auto sm:w-auto sm:gap-1.5 sm:px-3 sm:py-1.5"
           >
             <ExternalLink className="h-3.5 w-3.5" />
-            <span>原视频</span>
+            <span className="hidden sm:inline">原视频</span>
           </a>
         )}
       </div>

@@ -59,6 +59,7 @@ export function ModelSelector({ providerId, onSaved }: ModelSelectorProps) {
         <Button
           variant="ghost"
           type="button"
+          className="h-11 md:h-9"
           onClick={() => loadModels(providerId)}
           disabled={loading}
         >
@@ -67,7 +68,7 @@ export function ModelSelector({ providerId, onSaved }: ModelSelectorProps) {
       </div>
 
       <Select value={selectedModel} onValueChange={setSelectedModel}>
-        <SelectTrigger className="w-[300px]">
+        <SelectTrigger className="!h-11 w-full md:!h-9 md:w-[300px]">
           <SelectValue placeholder="请选择模型" />
         </SelectTrigger>
         <SelectContent>
@@ -87,7 +88,7 @@ export function ModelSelector({ providerId, onSaved }: ModelSelectorProps) {
         </SelectContent>
       </Select>
 
-      <Button onClick={handleSubmit} disabled={submitting || !selectedModel}>
+      <Button className="h-11 md:h-9" onClick={handleSubmit} disabled={submitting || !selectedModel}>
         {submitting ? '保存中...' : '保存模型'}
       </Button>
     </div>

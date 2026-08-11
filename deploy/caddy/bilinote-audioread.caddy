@@ -1,0 +1,3 @@
+# BiliNote is published through Cloudflare Tunnel directly to 127.0.0.1:11309.
+# AudioRead is a private sidecar on 127.0.0.1:11308 and the Compose network.
+# Intentionally keep both hostnames out of the public Caddy configuration.

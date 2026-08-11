@@ -35,7 +35,6 @@ export default function Transcriber() {
   const [selectedModelSize, setSelectedModelSize] = useState('')
   const [modelStatuses, setModelStatuses] = useState<ModelStatus[]>([])
   const [mlxModelStatuses, setMlxModelStatuses] = useState<ModelStatus[]>([])
-  const [mlxAvailable, setMlxAvailable] = useState(false)
   // 自定义模型表单
   const [newModelName, setNewModelName] = useState('')
   const [newModelTarget, setNewModelTarget] = useState('')
@@ -58,7 +57,6 @@ export default function Transcriber() {
       const data = await getModelsStatus()
       setModelStatuses(data.whisper)
       setMlxModelStatuses(data.mlx_whisper)
-      setMlxAvailable(data.mlx_available)
 
       // 下载失败主动提示：只对「本次新出现的失败」弹一次，避免轮询期间反复弹窗
       const failedNow = new Map<string, ModelStatus>()
@@ -209,7 +207,7 @@ export default function Transcriber() {
   const currentModels = selectedType === 'mlx-whisper' ? mlxModelStatuses : modelStatuses
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-5 p-4 pb-8 md:space-y-6 md:p-6">
       <div>
         <h2 className="text-2xl font-semibold">音频转写配置</h2>
         <p className="mt-1 text-sm text-neutral-500">
@@ -219,17 +217,17 @@ export default function Transcriber() {
 
       {/* 转写引擎选择 */}
       <Card>
-        <CardHeader>
+        <CardHeader className="px-4 md:px-6">
           <CardTitle className="flex items-center gap-2 text-lg">
             <AudioLines className="h-5 w-5" />
             转写引擎
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 px-4 md:px-6">
           <div className="space-y-2">
             <label className="text-sm font-medium">转写器类型</label>
             <Select value={selectedType} onValueChange={setSelectedType}>
-              <SelectTrigger className="w-full max-w-xs">
+              <SelectTrigger className="!h-11 w-full max-w-xs md:!h-9">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -246,7 +244,7 @@ export default function Transcriber() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Whisper 模型大小</label>
               <Select value={selectedModelSize} onValueChange={setSelectedModelSize}>
-                <SelectTrigger className="w-full max-w-xs">
+                <SelectTrigger className="!h-11 w-full max-w-xs md:!h-9">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -282,7 +280,7 @@ export default function Transcriber() {
             </Alert>
           )}
 
-          <Button onClick={handleSave} disabled={saving || (selectedType === 'mlx-whisper' && !config.mlx_whisper_available)} className="mt-2">
+          <Button onClick={handleSave} disabled={saving || (selectedType === 'mlx-whisper' && !config.mlx_whisper_available)} className="mt-2 h-11 w-full sm:w-auto md:h-9">
             {saving ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
@@ -296,7 +294,7 @@ export default function Transcriber() {
       {/* Whisper 模型管理 */}
       {isWhisperType(selectedType) && currentModels.length > 0 && (
         <Card>
-          <CardHeader>
+          <CardHeader className="px-4 md:px-6">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Download className="h-5 w-5" />
               模型管理
@@ -305,14 +303,14 @@ export default function Transcriber() {
               </span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 md:px-6">
             <div className="space-y-3">
               {currentModels.map(model => (
                 <div
                   key={model.model_size}
                   className="rounded-md border px-4 py-3"
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-3">
                       <span className="font-medium">{model.model_size}</span>
                       {model.downloaded ? (
@@ -359,7 +357,7 @@ export default function Transcriber() {
       {/* 自定义 Whisper 模型（仅 fast-whisper：名称不符合内置 Systran 约定的模型在此登记映射） */}
       {selectedType === 'fast-whisper' && (
         <Card>
-          <CardHeader>
+          <CardHeader className="px-4 md:px-6">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Boxes className="h-5 w-5" />
               自定义模型
@@ -368,7 +366,7 @@ export default function Transcriber() {
               </span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 px-4 md:px-6">
             <Alert className="text-sm">
               <AlertDescription>
                 填 <strong>HF repo_id</strong>（如{' '}
@@ -389,7 +387,7 @@ export default function Transcriber() {
                   return (
                     <div
                       key={name}
-                      className="flex items-center justify-between gap-3 rounded-md border px-4 py-2.5"
+                      className="flex items-center justify-between gap-3 rounded-md border px-3 py-2.5 sm:px-4"
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 font-medium">
@@ -416,7 +414,7 @@ export default function Transcriber() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="text-red-500 hover:text-red-600"
+                        className="h-11 w-11 text-red-500 hover:text-red-600"
                         onClick={() => handleDeleteCustomModel(name)}
                       >
                         <Trash2 className="h-4 w-4" />

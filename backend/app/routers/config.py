@@ -2,6 +2,8 @@ import os
 import platform
 from pathlib import Path
 
+import httpx
+
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import Optional
@@ -53,6 +55,7 @@ AVAILABLE_TRANSCRIBER_TYPES = [
     {"value": "bcut", "label": "必剪（在线）"},
     {"value": "kuaishou", "label": "快手（在线）"},
     {"value": "groq", "label": "Groq（在线）"},
+    {"value": "qwen-audioread", "label": "通义千问音视频速读（在线）"},
     {"value": "mlx-whisper", "label": "MLX Whisper（仅macOS）"},
 ]
 
@@ -434,11 +437,14 @@ async def sys_health():
     except Exception:
         pass
 
+    audioread_info = await _get_audioread_status()
+
     return R.success(data={
         "backend": "ok",
         "ffmpeg": ffmpeg_status,
         "db": db_status,
         "whisper_model": whisper_info,
+        "audioread": audioread_info,
     })
 
 
@@ -505,9 +511,57 @@ async def deploy_status():
     except Exception:
         ffmpeg_ok = False
 
+    audioread_info = await _get_audioread_status()
+
     return R.success(data={
         "backend": {"status": "running", "port": int(os.getenv("BACKEND_PORT", 8483))},
         "cuda": cuda_info,
         "whisper": whisper_info,
         "ffmpeg": {"available": ffmpeg_ok},
+        "audioread": audioread_info,
     })
+
+
+async def _get_audioread_status() -> dict:
+    base_url = os.getenv("QWEN_AUDIOREAD_BASE_URL", "").strip().rstrip("/")
+    api_key = os.getenv("QWEN_AUDIOREAD_API_KEY", "").strip()
+    if not base_url or not api_key:
+        return {
+            "configured": False,
+            "reachable": False,
+            "authenticated": False,
+            "status": "not_configured",
+        }
+
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            readiness = await client.get(f"{base_url}/ready")
+            if readiness.status_code != 200:
+                try:
+                    reason = str(readiness.json().get("reason") or f"http_{readiness.status_code}")
+                except Exception:
+                    reason = f"http_{readiness.status_code}"
+                return {
+                    "configured": True,
+                    "reachable": True,
+                    "authenticated": False,
+                    "status": reason,
+                }
+            response = await client.get(
+                f"{base_url}/api/v1/jobs",
+                params={"limit": 1},
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+        return {
+            "configured": True,
+            "reachable": True,
+            "authenticated": response.status_code == 200,
+            "status": "ok" if response.status_code == 200 else f"http_{response.status_code}",
+        }
+    except Exception as error:
+        return {
+            "configured": True,
+            "reachable": False,
+            "authenticated": False,
+            "status": type(error).__name__,
+        }

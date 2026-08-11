@@ -2,7 +2,6 @@ import json
 import logging
 import os
 from dataclasses import asdict
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Tuple, Union, Any
 
@@ -30,12 +29,14 @@ from app.models.notes_model import AudioDownloadResult, NoteResult
 from app.models.transcriber_model import TranscriptResult, TranscriptSegment
 from app.services.constant import SUPPORT_PLATFORM_MAP
 from app.services.task_log import install_task_log_handler
+from app.services.task_status import update_task_status
 from app.services.provider import ProviderService
 from app.transcriber.base import Transcriber
 from app.transcriber.transcriber_provider import get_transcriber, _transcribers
 from app.utils.note_helper import replace_content_markers, prepend_source_link
 from app.utils.screenshot_marker import extract_screenshot_timestamps
 from app.utils.status_code import StatusCode
+from app.utils.url_parser import extract_video_id
 from app.utils.video_helper import generate_screenshot
 from app.utils.video_reader import VideoReader
 
@@ -204,6 +205,7 @@ class NoteGenerator:
 
             # 3. GPT 总结
             markdown = self._summarize_text(
+                task_id=task_id,
                 audio_meta=audio_meta,
                 transcript=transcript,
                 gpt=gpt,
@@ -319,50 +321,7 @@ class NoteGenerator:
         :param status: TaskStatus 枚举或自定义状态字符串
         :param message: 可选消息，用于记录失败原因等
         """
-        if not task_id:
-            return
-
-        NOTE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        status_file = NOTE_OUTPUT_DIR / f"{task_id}.status.json"
-        status_value = status.value if isinstance(status, TaskStatus) else status
-        try:
-            status_enum = TaskStatus(status_value)
-            default_message = TaskStatus.description(status_enum)
-        except ValueError:
-            default_message = "处理中"
-
-        data = {
-            "status": status_value,
-            "message": message or default_message,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }
-
-        logger.info(
-            "任务状态更新 (task_id=%s, status=%s): %s",
-            task_id,
-            status_value,
-            data["message"],
-        )
-
-        try:
-            # First create a temporary file
-            temp_file = status_file.with_suffix('.tmp')
-
-            # Write to temporary file
-            with temp_file.open('w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-
-            # Atomic rename operation
-            temp_file.replace(status_file)
-
-        except Exception as e:
-            logger.error(f"写入状态文件失败 (task_id={task_id})：{e}")
-            # Try to write error to file directly as fallback
-            try:
-                with status_file.open('w', encoding='utf-8') as f:
-                    f.write(f"Error writing status: {str(e)}")
-            except:
-                logger.error(f"写入错误  {e}")
+        update_task_status(task_id, status, message=message, output_dir=NOTE_OUTPUT_DIR)
 
     def _handle_exception(self, task_id, exc):
         logger.error(f"任务异常 (task_id={task_id})", exc_info=True)
@@ -437,7 +396,13 @@ class NoteGenerator:
                 logger.info(f"元信息提取完成 ({audio_cache_file})")
                 return audio
             except Exception as exc:
-                logger.warning(f"元信息提取失败，将尝试完整下载: {exc}")
+                logger.warning(f"元信息提取失败，已有字幕将使用最小元信息继续处理: {exc}")
+                audio = self._build_minimal_audio_metadata(video_url, platform)
+                audio_cache_file.write_text(
+                    json.dumps(asdict(audio), ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+                return audio
 
         # 判断是否需要下载视频
         need_video = screenshot or video_understanding
@@ -484,6 +449,27 @@ class NoteGenerator:
             logger.error(f"音频下载失败：{exc}")
             self._handle_exception(task_id, exc)
             raise
+
+    @staticmethod
+    def _build_minimal_audio_metadata(
+        video_url: Union[str, HttpUrl],
+        platform: str,
+    ) -> AudioDownloadResult:
+        normalized_url = str(video_url)
+        video_id = extract_video_id(normalized_url, platform) or normalized_url
+        return AudioDownloadResult(
+            file_path="",
+            title=video_id,
+            duration=0,
+            cover_url=None,
+            platform=platform,
+            video_id=video_id,
+            raw_info={
+                "webpage_url": normalized_url,
+                "metadata_fallback": True,
+            },
+            video_path=None,
+        )
 
 
     def _get_transcript(
@@ -584,6 +570,7 @@ class NoteGenerator:
 
     def _summarize_text(
         self,
+        task_id: Optional[str],
         audio_meta: AudioDownloadResult,
         transcript: TranscriptResult,
         gpt: GPT,
@@ -593,7 +580,7 @@ class NoteGenerator:
         formats: List[str],
         style: Optional[str],
         extras: Optional[str],
-            video_img_urls: List[str],
+        video_img_urls: List[str],
     ) -> str | None:
         """
         调用 GPT 对转写结果进行总结，生成 Markdown 文本并缓存。
@@ -609,7 +596,6 @@ class NoteGenerator:
         :param extras: GPT 额外参数
         :return: 生成的 Markdown 字符串
         """
-        task_id = markdown_cache_file.stem
         self._update_status(task_id, TaskStatus.SUMMARIZING)
 
         source = GPTSource(

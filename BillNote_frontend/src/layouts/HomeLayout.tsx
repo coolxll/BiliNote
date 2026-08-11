@@ -1,5 +1,13 @@
 import React, { FC, useRef, useState } from 'react'
-import { SlidersHorizontal, PanelLeftClose, PanelLeftOpen, History as HistoryIcon } from 'lucide-react'
+import {
+  BookOpenText,
+  FilePenLine,
+  History as HistoryIcon,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Podcast,
+  SlidersHorizontal,
+} from 'lucide-react'
 import {
   Tooltip,
   TooltipContent,
@@ -12,19 +20,103 @@ import { ResizablePanel, ResizablePanelGroup, ResizableHandle } from '@/componen
 import { ScrollArea } from "@/components/ui/scroll-area.tsx"
 import type { ImperativePanelHandle } from 'react-resizable-panels'
 import logo from '@/assets/icon.svg'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
+
+export type MobileHomeView = 'create' | 'history' | 'note'
 
 interface IProps {
   NoteForm: React.ReactNode
   Preview: React.ReactNode
   History: React.ReactNode
+  mobileView: MobileHomeView
+  onMobileViewChange: (view: MobileHomeView) => void
 }
 
-const HomeLayout: FC<IProps> = ({ NoteForm, Preview, History }) => {
+const mobileNavItems: Array<{
+  id: MobileHomeView
+  label: string
+  icon: typeof FilePenLine
+}> = [
+  { id: 'create', label: '创建', icon: FilePenLine },
+  { id: 'history', label: '历史', icon: HistoryIcon },
+  { id: 'note', label: '笔记', icon: BookOpenText },
+]
+
+const HomeLayout: FC<IProps> = ({
+  NoteForm,
+  Preview,
+  History,
+  mobileView,
+  onMobileViewChange,
+}) => {
   const [, setShowSettings] = useState(false)
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false)
   const [isMiddleCollapsed, setIsMiddleCollapsed] = useState(false)
   const leftPanelRef = useRef<ImperativePanelHandle>(null)
   const middlePanelRef = useRef<ImperativePanelHandle>(null)
+  const isMobile = useMediaQuery('(max-width: 767px)')
+
+  if (isMobile) {
+    const content = {
+      create: NoteForm,
+      history: History,
+      note: Preview,
+    }[mobileView]
+
+    return (
+      <div className="flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-white">
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-neutral-200 px-4">
+          <div className="flex min-w-0 items-center gap-2">
+            <img src={logo} alt="BiliNote" className="h-8 w-8 shrink-0 object-contain" />
+            <span className="truncate text-lg font-bold text-neutral-800">BiliNote</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Link
+              to="/podcasts"
+              className="flex h-11 w-11 items-center justify-center rounded-md text-neutral-600 hover:bg-neutral-100"
+              aria-label="发现 Podcast"
+            >
+              <Podcast className="h-5 w-5" />
+            </Link>
+            <Link
+              to="/settings"
+              className="flex h-11 w-11 items-center justify-center rounded-md text-neutral-600 hover:bg-neutral-100"
+              aria-label="打开设置"
+            >
+              <SlidersHorizontal className="h-5 w-5" />
+            </Link>
+          </div>
+        </header>
+
+        <main className="min-h-0 flex-1 overflow-hidden">{content}</main>
+
+        <nav
+          className="grid shrink-0 grid-cols-3 border-t border-neutral-200 bg-white"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+          aria-label="首页导航"
+        >
+          {mobileNavItems.map(item => {
+            const Icon = item.icon
+            const active = item.id === mobileView
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onMobileViewChange(item.id)}
+                className={`flex min-h-14 flex-col items-center justify-center gap-1 text-xs transition-colors ${
+                  active ? 'text-primary' : 'text-neutral-500'
+                }`}
+                aria-current={active ? 'page' : undefined}
+              >
+                <Icon className="h-5 w-5" />
+                <span>{item.label}</span>
+              </button>
+            )
+          })}
+        </nav>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
@@ -49,6 +141,22 @@ const HomeLayout: FC<IProps> = ({ NoteForm, Preview, History }) => {
                 <div className="text-2xl font-bold text-gray-800">BiliNote</div>
               </div>
               <div className="flex items-center gap-1">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Link
+                        to="/podcasts"
+                        className="text-muted-foreground hover:text-primary rounded p-1 hover:bg-neutral-100"
+                        aria-label="发现 Podcast"
+                      >
+                        <Podcast className="h-5 w-5" />
+                      </Link>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <span>发现 Podcast</span>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>

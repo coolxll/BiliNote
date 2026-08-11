@@ -67,8 +67,12 @@ class XiaoyuzhouProvider:
         podcast = episode.get("podcast") if isinstance(episode.get("podcast"), dict) else {}
         labels = episode.get("labels") if isinstance(episode.get("labels"), list) else []
         tags = [item.get("name") for item in labels if isinstance(item, dict) and item.get("name")]
-        raw_info = dict(episode)
-        raw_info.update({"source_url": episode_url, "audio_url": audio_url, "tags": tags})
+        raw_info = {
+            key: value
+            for key, value in episode.items()
+            if key not in {"enclosure", "media", "mediaKey"}
+        }
+        raw_info.update({"source_url": episode_url, "tags": tags})
 
         return XiaoyuzhouEpisode(
             episode_id=resolved_id,

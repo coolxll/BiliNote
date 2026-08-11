@@ -27,11 +27,23 @@ class UniversalGPT(GPT):
         self.screenshot = False
         self.link = False
         self.max_request_bytes = int(os.getenv("OPENAI_MAX_REQUEST_BYTES", str(45 * 1024 * 1024)))
+        self.max_segments_per_chunk = max(
+            1,
+            int(os.getenv("OPENAI_MAX_SEGMENTS_PER_CHUNK", "500")),
+        )
         self.checkpoint_dir = Path(os.getenv("NOTE_OUTPUT_DIR", "note_results"))
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         # 初始化时缓存重试配置，避免每次请求重复读取环境变量
         self._max_retry_attempts = max(1, int(os.getenv("OPENAI_RETRY_ATTEMPTS", "3")))
         self._retry_base_backoff = float(os.getenv("OPENAI_RETRY_BACKOFF_SECONDS", "1.5"))
+        self._request_timeout_seconds = max(
+            1.0,
+            float(os.getenv("OPENAI_REQUEST_TIMEOUT_SECONDS", "150")),
+        )
+        self._retry_max_elapsed_seconds = max(
+            self._request_timeout_seconds,
+            float(os.getenv("OPENAI_RETRY_MAX_ELAPSED_SECONDS", "300")),
+        )
 
     def _format_time(self, seconds: float) -> str:
         return str(timedelta(seconds=int(seconds)))[2:]
@@ -107,6 +119,7 @@ class UniversalGPT(GPT):
             "model": self.model,
             "temperature": self.temperature,
             "max_request_bytes": self.max_request_bytes,
+            "max_segments_per_chunk": self.max_segments_per_chunk,
             "title": source.title,
             "tags": source.tags,
             "format": source._format,
@@ -199,7 +212,7 @@ class UniversalGPT(GPT):
             or "only the default" in raw
         )
 
-    def _do_create(self, messages: list):
+    def _do_create(self, messages: list, timeout_seconds: float):
         """单次调用。如果模型拒绝自定义 temperature，就地去掉该参数再试一次
         （不消耗外层的重试次数预算），仍失败则把异常抛给外层重试逻辑。"""
         try:
@@ -207,6 +220,7 @@ class UniversalGPT(GPT):
                 model=self.model,
                 messages=messages,
                 temperature=self.temperature,
+                timeout=timeout_seconds,
             )
         except Exception as exc:
             if self._is_temperature_unsupported_error(exc):
@@ -214,24 +228,63 @@ class UniversalGPT(GPT):
                 return self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
+                    timeout=timeout_seconds,
                 )
             raise
 
+    @staticmethod
+    def _retry_error_summary(exc: Exception) -> str:
+        raw = str(exc).lower()
+        if "524" in raw:
+            return "上游服务返回 524，生成超时"
+        if "429" in raw or "rate limit" in raw:
+            return "上游服务限流"
+        if "timeout" in raw or "timed out" in raw:
+            return "请求超时"
+        status = getattr(exc, "status_code", None) or getattr(exc, "status", None)
+        return f"上游服务错误 {status}" if status else type(exc).__name__
+
+    def _retry_exhausted_error(self, exc: Exception, attempts: int) -> RuntimeError:
+        summary = self._retry_error_summary(exc)
+        return RuntimeError(
+            f"GPT 请求连续失败 {attempts} 次，已停止重试：{summary}。"
+            "请稍后重试，或切换响应更快的模型。"
+        )
+
     def _chat_completion_create(self, messages: list):
         last_exc = None
+        started_at = time.monotonic()
+        deadline = started_at + self._retry_max_elapsed_seconds
         for attempt in range(self._max_retry_attempts):
+            remaining_seconds = deadline - time.monotonic()
+            if remaining_seconds <= 0 and last_exc is not None:
+                raise self._retry_exhausted_error(last_exc, attempt) from last_exc
+            request_timeout = min(self._request_timeout_seconds, max(1.0, remaining_seconds))
             try:
-                return self._do_create(messages)
+                return self._do_create(messages, timeout_seconds=request_timeout)
             except Exception as exc:
                 last_exc = exc
                 logger.warning(
                     f"GPT 请求失败: model={self.model}, attempt={attempt + 1}/{self._max_retry_attempts}, "
                     f"error={type(exc).__name__}: {exc}"
                 )
-                if attempt == self._max_retry_attempts - 1 or not self._is_retryable_error(exc):
+                retryable = self._is_retryable_error(exc)
+                if not retryable:
                     raise
+                if attempt == self._max_retry_attempts - 1:
+                    raise self._retry_exhausted_error(exc, attempt + 1) from exc
+
+                remaining_seconds = deadline - time.monotonic()
+                if remaining_seconds <= 0:
+                    raise self._retry_exhausted_error(exc, attempt + 1) from exc
                 sleep_seconds = self._retry_base_backoff * (2 ** attempt)
-                time.sleep(sleep_seconds)
+                sleep_seconds = min(sleep_seconds, remaining_seconds)
+                logger.warning(
+                    f"GPT 将在 {sleep_seconds:.1f} 秒后重试；"
+                    f"本轮剩余时间 {remaining_seconds:.1f} 秒"
+                )
+                if sleep_seconds > 0:
+                    time.sleep(sleep_seconds)
 
         if last_exc is not None:
             raise last_exc
@@ -283,7 +336,12 @@ class UniversalGPT(GPT):
         def message_builder(segments, image_urls, **kwargs):
             return self.create_messages(segments, video_img_urls=image_urls, **kwargs)
 
-        chunker = RequestChunker(message_builder, self.max_request_bytes, self._estimate_messages_bytes)
+        chunker = RequestChunker(
+            message_builder,
+            self.max_request_bytes,
+            self._estimate_messages_bytes,
+            max_segments=self.max_segments_per_chunk,
+        )
 
         try:
             chunks = chunker.chunk(

@@ -14,6 +14,14 @@ export interface SysHealth {
     /** 是否实际检查过 —— 在线引擎跳过检查时为 false */
     checked: boolean
   }
+  audioread: AudioReadStatus
+}
+
+export interface AudioReadStatus {
+  configured: boolean
+  reachable: boolean
+  authenticated: boolean
+  status: string
 }
 
 /** 详细健康状态：用于设置页 / 启动诊断。后端始终返回 200，按字段判断各项。 */
@@ -45,6 +53,7 @@ export interface DeployStatus {
   ffmpeg: {
     available: boolean
   }
+  audioread: AudioReadStatus
 }
 
 export const getDeployStatus = async (): Promise<DeployStatus> => {

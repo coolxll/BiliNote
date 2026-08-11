@@ -1,0 +1,9 @@
+[Unit]
+Description=Clean old Qwen AudioRead jobs
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/app/bilinote
+ExecStart=/usr/bin/docker compose exec -T qwen-audioread-api python scripts/job_admin.py cleanup --older-than-hours 168 --apply

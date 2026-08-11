@@ -6,6 +6,7 @@ import {
     Server,
     Cpu,
     AudioLines,
+    RadioTower,
     Film,
     RefreshCw,
     CheckCircle2,
@@ -28,7 +29,7 @@ export default function Monitor() {
             const data = await getDeployStatus()
             setStatus(data)
             setLastUpdated(new Date())
-        } catch (err) {
+        } catch {
             setError('无法连接到后端服务')
             setStatus(null)
         } finally {
@@ -58,16 +59,16 @@ export default function Monitor() {
 
     return (
         <ScrollArea className="h-full overflow-y-auto bg-white">
-            <div className="container mx-auto px-4 py-8">
+            <div className="container mx-auto px-4 py-5 md:py-8">
                 {/* Header */}
-                <div className="mb-8 flex items-center justify-between">
+                <div className="mb-6 flex flex-col items-start gap-3 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h1 className="text-2xl font-bold">部署监控</h1>
                         <p className="text-muted-foreground text-sm">
                             实时监控系统各组件运行状态
                         </p>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:gap-4">
                         {lastUpdated && (
                             <span className="text-muted-foreground text-xs">
                                 最后更新: {lastUpdated.toLocaleTimeString()}
@@ -76,6 +77,7 @@ export default function Monitor() {
                         <Button
                             variant="outline"
                             size="sm"
+                            className="h-11 sm:h-9"
                             onClick={fetchStatus}
                             disabled={loading}
                         >
@@ -206,6 +208,36 @@ export default function Monitor() {
                                     )}
                                 </div>
                             ) : null}
+                        </CardContent>
+                    </Card>
+
+                    {/* Qwen AudioRead */}
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-lg font-medium">
+                                <RadioTower className="mr-2 inline h-5 w-5 text-cyan-600" />
+                                千问音视频速读
+                            </CardTitle>
+                            {status && (
+                                <StatusBadge
+                                    ok={status.audioread.authenticated}
+                                    label={status.audioread.authenticated ? '已连接' : '不可用'}
+                                />
+                            )}
+                        </CardHeader>
+                        <CardContent>
+                            {status && (
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">配置:</span>
+                                        <span>{status.audioread.configured ? '已配置' : '未配置'}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">状态:</span>
+                                        <span className="font-mono">{status.audioread.status}</span>
+                                    </div>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
 

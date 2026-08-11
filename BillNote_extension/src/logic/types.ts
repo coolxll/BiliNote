@@ -149,7 +149,7 @@ export interface ProviderCreatePayload {
   logo?: string
 }
 
-export type TranscriberType = 'fast-whisper' | 'bcut' | 'kuaishou' | 'groq' | 'mlx-whisper'
+export type TranscriberType = 'fast-whisper' | 'bcut' | 'kuaishou' | 'groq' | 'mlx-whisper' | 'qwen-audioread'
 export type WhisperModelSize = 'tiny' | 'base' | 'small' | 'medium' | 'large-v3' | 'large-v3-turbo'
 
 export interface TranscriberOption {

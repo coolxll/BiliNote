@@ -308,6 +308,7 @@ const Onboarding = () => {
             <p className="text-sm text-gray-600">把视频音频转成文字。<strong>推荐在线引擎</strong>，避免本地下载 ~600MB 的模型。</p>
             <div className="grid gap-2">
               {[
+                { value: 'qwen-audioread', title: '通义千问音视频速读（在线）', desc: '适合自托管服务部署，无需本地 GPU；需要管理员配置 AudioRead sidecar。' },
                 { value: 'groq', title: 'Groq（在线，推荐）', desc: '注册 https://groq.com/ 拿免费 key；速度快、英文语料佳。无需本地模型。' },
                 { value: 'bcut', title: '必剪（在线，免登）', desc: '免登，中文表现好；偶尔限流。' },
                 { value: 'kuaishou', title: '快手（在线，免登）', desc: '与必剪类似，备选。' },
