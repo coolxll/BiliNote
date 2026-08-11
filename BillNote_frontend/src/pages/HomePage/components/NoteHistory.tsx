@@ -1,10 +1,7 @@
-import { useTaskStore } from '@/store/taskStore'
-import { ScrollArea } from '@/components/ui/scroll-area.tsx'
-import { Badge } from '@/components/ui/badge.tsx'
+import { hasUsableMarkdown, useTaskStore } from '@/store/taskStore'
 import { cn } from '@/lib/utils.ts'
 import { Trash } from 'lucide-react'
 import { Button } from '@/components/ui/button.tsx'
-import PinyinMatch from 'pinyin-match'
 import Fuse from 'fuse.js'
 
 import {
@@ -14,7 +11,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip.tsx'
 import LazyImage from "@/components/LazyImage.tsx";
-import {FC, useState, useEffect, useMemo} from 'react'
+import {FC, useState, useMemo} from 'react'
 
 interface NoteHistoryProps {
   onSelect: (taskId: string) => void
@@ -26,20 +23,11 @@ const NoteHistory: FC<NoteHistoryProps> = ({ onSelect, selectedId }) => {
   const removeTask = useTaskStore(state => state.removeTask)
   // 确保baseURL没有尾部斜杠
   const baseURL = (String(import.meta.env.VITE_API_BASE_URL || 'api')).replace(/\/$/, '')
-  const [rawSearch, setRawSearch] = useState('')
   const [search, setSearch] = useState('')
   const fuse = useMemo(() => new Fuse(tasks, {
     keys: ['audioMeta.title'],
     threshold: 0.4 // 匹配精度（越低越严格）
   }), [tasks])
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (rawSearch === '') return
-      setSearch(rawSearch)
-    }, 300) // 300ms 防抖
-
-    return () => clearTimeout(timer)
-  }, [rawSearch])
   const filteredTasks = search.trim()
       ? fuse.search(search).map(result => result.item)
       : tasks
@@ -50,7 +38,7 @@ const NoteHistory: FC<NoteHistoryProps> = ({ onSelect, selectedId }) => {
             <input
                 type="text"
                 placeholder="搜索笔记标题..."
-                className="w-full rounded border border-neutral-300 px-3 py-1 text-sm outline-none focus:border-primary"
+                className="h-11 w-full rounded border border-neutral-300 px-3 text-base outline-none focus:border-primary md:h-8 md:text-sm"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
             />
@@ -70,18 +58,20 @@ const NoteHistory: FC<NoteHistoryProps> = ({ onSelect, selectedId }) => {
         <input
             type="text"
             placeholder="搜索笔记标题..."
-            className="w-full rounded border border-neutral-300 px-3 py-1 text-sm outline-none focus:border-primary"
+            className="h-11 w-full rounded border border-neutral-300 px-3 text-base outline-none focus:border-primary md:h-8 md:text-sm"
             value={search}
             onChange={e => setSearch(e.target.value)}
         />
       </div>
       <div className="flex flex-col gap-2 overflow-hidden">
-        {filteredTasks.map(task => (
+        {filteredTasks.map(task => {
+          const failedWithResult = task.status === 'FAILED' && hasUsableMarkdown(task.markdown)
+          return (
           <div
             key={task.id}
             onClick={() => onSelect(task.id)}
             className={cn(
-              'flex cursor-pointer flex-col rounded-md border border-neutral-200 p-3',
+              'flex min-h-24 cursor-pointer flex-col rounded-md border border-neutral-200 p-3 transition-colors',
               selectedId === task.id && 'border-primary bg-primary-light'
             )}
           >
@@ -115,7 +105,7 @@ const NoteHistory: FC<NoteHistoryProps> = ({ onSelect, selectedId }) => {
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <div className="line-clamp-2 max-w-[180px] flex-1 overflow-hidden text-sm text-ellipsis">
+                      <div className="line-clamp-2 min-w-0 flex-1 overflow-hidden text-sm text-ellipsis md:max-w-[180px]">
                         {task.audioMeta.title || '未命名笔记'}
                       </div>
                     </TooltipTrigger>
@@ -128,9 +118,9 @@ const NoteHistory: FC<NoteHistoryProps> = ({ onSelect, selectedId }) => {
             </div>
             <div className={'mt-2 flex items-center justify-between text-[10px]'}>
               <div className="shrink-0">
-                {task.status === 'SUCCESS' && (
+                {(task.status === 'SUCCESS' || failedWithResult) && (
                   <div className={'bg-primary w-10 rounded p-0.5 text-center text-white'}>
-                    已完成
+                    {failedWithResult ? '有结果' : '已完成'}
                   </div>
                 )}
                 {task.status !== 'SUCCESS' && task.status !== 'FAILED' ? (
@@ -140,7 +130,7 @@ const NoteHistory: FC<NoteHistoryProps> = ({ onSelect, selectedId }) => {
                 ) : (
                   <></>
                 )}
-                {task.status === 'FAILED' && (
+                {task.status === 'FAILED' && !failedWithResult && (
                   <div className={'w-10 rounded bg-red-500 p-0.5 text-center text-white'}>失败</div>
                 )}
               </div>
@@ -157,7 +147,7 @@ const NoteHistory: FC<NoteHistoryProps> = ({ onSelect, selectedId }) => {
                           e.stopPropagation()
                           removeTask(task.id)
                         }}
-                        className="shrink-0"
+                        className="h-11 w-11 shrink-0 md:h-8 md:w-8"
                       >
                         <Trash className="text-muted-foreground h-4 w-4" />
                       </Button>
@@ -177,7 +167,8 @@ const NoteHistory: FC<NoteHistoryProps> = ({ onSelect, selectedId }) => {
               {/*</div>*/}
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
     </>
   )

@@ -25,6 +25,23 @@ export interface XiaoyuzhouSearchResult {
   load_more_key: Record<string, unknown> | null
 }
 
+export interface XiaoyuzhouSendCodeResult {
+  message: string
+  request_id: string
+}
+
+export interface XiaoyuzhouQrSession {
+  id: string
+  url: string
+  status: string
+  expires_in: number
+}
+
+export interface XiaoyuzhouQrPollResult {
+  status: string
+  authenticated: boolean
+}
+
 export const getXiaoyuzhouAuthStatus = async (): Promise<XiaoyuzhouAuthStatus> => {
   return await request.get('/xiaoyuzhou/auth/status', { suppressToast: true })
 }
@@ -32,8 +49,18 @@ export const getXiaoyuzhouAuthStatus = async (): Promise<XiaoyuzhouAuthStatus> =
 export const sendXiaoyuzhouCode = async (data: {
   mobile_phone_number: string
   area_code?: string
-}): Promise<void> => {
-  await request.post('/xiaoyuzhou/auth/send-code', data)
+}): Promise<XiaoyuzhouSendCodeResult> => {
+  return await request.post('/xiaoyuzhou/auth/send-code', data)
+}
+
+export const createXiaoyuzhouQrSession = async (): Promise<XiaoyuzhouQrSession> => {
+  return await request.post('/xiaoyuzhou/auth/qrcode/create')
+}
+
+export const pollXiaoyuzhouQrSession = async (
+  id: string,
+): Promise<XiaoyuzhouQrPollResult> => {
+  return await request.post('/xiaoyuzhou/auth/qrcode/poll', { id }, { suppressToast: true })
 }
 
 export const loginXiaoyuzhou = async (data: {

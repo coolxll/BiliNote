@@ -11,7 +11,15 @@ import requests
 
 
 API_BASE_URL = "https://api.xiaoyuzhoufm.com"
+QR_API_BASE_URL = "https://web-api.xiaoyuzhoufm.com/v1"
+QR_REFRESH_URL = "https://web-api.xiaoyuzhoufm.com/app_auth_tokens.refresh"
+QR_APP_ID = "v6worU4NnWyL"
+QR_CLIENT_ID = "xyz-web"
 TOKEN_REFRESH_AGE_SECONDS = 20 * 60
+X_CUSTOM_HEADER = "eyJ2ZXJzaW9uIjoiMS4wIn0="
+APP_VERSION = "2.114.0"
+APP_BUILD_NO = "1576"
+IOS_VERSION = "17.4.1"
 
 
 class XiaoyuzhouApiError(RuntimeError):
@@ -73,6 +81,7 @@ class XiaoyuzhouTokenStore:
         access_token: str,
         refresh_token: str,
         user: Optional[Dict[str, Any]] = None,
+        auth_method: str = "sms",
     ) -> None:
         data = self.read()
         data.update(
@@ -82,6 +91,7 @@ class XiaoyuzhouTokenStore:
                 "updated_at": int(time.time()),
                 "uid": (user or {}).get("uid", ""),
                 "nickname": (user or {}).get("nickname", ""),
+                "auth_method": auth_method,
             }
         )
         self.write(data)
@@ -114,7 +124,7 @@ class XiaoyuzhouAuthProvider:
     def auth_status(self) -> Dict[str, Any]:
         return self.token_store.public_status()
 
-    def send_code(self, mobile_phone_number: str, area_code: str = "+86") -> None:
+    def send_code(self, mobile_phone_number: str, area_code: str = "+86") -> Dict[str, str]:
         response = self.session.post(
             f"{API_BASE_URL}/v1/auth/sendCode",
             json={"mobilePhoneNumber": mobile_phone_number, "areaCode": area_code},
@@ -122,6 +132,65 @@ class XiaoyuzhouAuthProvider:
             timeout=30,
         )
         self.raise_for_response(response, "发送验证码失败")
+        payload = self.response_json(response)
+        business_code = payload.get("code")
+        if payload.get("success") is False or (
+            isinstance(business_code, int) and business_code != 0
+        ):
+            raise XiaoyuzhouApiError(self.response_message(payload, "发送验证码失败"))
+        return {
+            "message": self.response_message(payload, "验证码请求已提交"),
+            "request_id": response.headers.get("X-Request-Id", ""),
+        }
+
+    def create_qr_session(self) -> Dict[str, Any]:
+        response = self.session.post(
+            f"{QR_API_BASE_URL}/auth/qrcode/create",
+            json={"clientId": QR_CLIENT_ID},
+            headers=self.qr_headers(),
+            timeout=30,
+        )
+        self.raise_for_response(response, "创建小宇宙登录二维码失败")
+        payload = self.response_json(response)
+        qrcode_id = payload.get("id")
+        qrcode_url = payload.get("url")
+        if not isinstance(qrcode_id, str) or not qrcode_id:
+            raise XiaoyuzhouApiError("小宇宙未返回二维码会话 ID")
+        if not isinstance(qrcode_url, str) or not qrcode_url.startswith(
+            "https://h5.xiaoyuzhoufm.com/oauth?"
+        ):
+            raise XiaoyuzhouApiError("小宇宙返回了无效的二维码地址")
+        return {
+            "id": qrcode_id,
+            "url": qrcode_url,
+            "status": "WAITTING",
+            "expires_in": 180,
+        }
+
+    def poll_qr_session(self, qrcode_id: str) -> Dict[str, Any]:
+        response = self.session.post(
+            f"{QR_API_BASE_URL}/auth/qrcode/login",
+            json={"id": qrcode_id},
+            headers=self.qr_headers(),
+            timeout=30,
+        )
+        self.raise_for_response(response, "查询小宇宙扫码状态失败")
+        payload = self.response_json(response)
+        status = str(payload.get("status") or "UNKNOWN").upper()
+        access_token = response.headers.get("x-jike-access-token", "")
+        refresh_token = response.headers.get("x-jike-refresh-token", "")
+        authenticated = bool(access_token and refresh_token)
+        if authenticated:
+            self.token_store.save_login(
+                access_token,
+                refresh_token,
+                auth_method="qrcode",
+            )
+            status = "CONFIRMED"
+        return {
+            "status": status,
+            "authenticated": authenticated,
+        }
 
     def login(
         self,
@@ -172,27 +241,63 @@ class XiaoyuzhouAuthProvider:
             refresh_token = auth.get("refresh_token")
             if not refresh_token:
                 raise XiaoyuzhouAuthenticationRequired()
-            response = self.session.post(
-                f"{API_BASE_URL}/app_auth_tokens.refresh",
-                headers=self.headers(
-                    access_token=auth.get("access_token"),
-                    refresh_token=refresh_token,
-                    content_type="application/x-www-form-urlencoded; charset=utf-8",
-                ),
-                timeout=30,
+            auth_method = str(auth.get("auth_method") or "sms")
+            candidates = []
+            if auth_method == "qrcode":
+                candidates.append(
+                    (
+                        QR_REFRESH_URL,
+                        {
+                            **self.qr_headers(),
+                            "x-jike-access-token": str(auth.get("access_token") or ""),
+                            "x-jike-refresh-token": str(refresh_token),
+                        },
+                        True,
+                    )
+                )
+            candidates.append(
+                (
+                    f"{API_BASE_URL}/app_auth_tokens.refresh",
+                    self.headers(
+                        access_token=auth.get("access_token"),
+                        refresh_token=refresh_token,
+                        content_type="application/x-www-form-urlencoded; charset=utf-8",
+                    ),
+                    False,
+                )
             )
-            self.raise_for_response(response, "小宇宙登录已失效，请重新登录")
-            payload = self.response_json(response)
-            access_token = payload.get("x-jike-access-token") or response.headers.get(
-                "x-jike-access-token"
-            )
-            new_refresh_token = payload.get("x-jike-refresh-token") or response.headers.get(
-                "x-jike-refresh-token"
-            )
-            if not access_token or not new_refresh_token:
-                raise XiaoyuzhouAuthenticationRequired("token 刷新失败，请重新登录小宇宙")
-            self.token_store.save_login(access_token, new_refresh_token, auth)
-            return access_token
+
+            last_message = "小宇宙登录已失效，请重新登录"
+            for url, headers, send_json in candidates:
+                response = self.session.post(
+                    url,
+                    headers=headers,
+                    json={} if send_json else None,
+                    timeout=30,
+                )
+                if not 200 <= response.status_code < 300:
+                    last_message = self.response_message(
+                        self.response_json(response),
+                        last_message,
+                    )
+                    continue
+                payload = self.response_json(response)
+                access_token = payload.get("x-jike-access-token") or response.headers.get(
+                    "x-jike-access-token"
+                )
+                new_refresh_token = payload.get("x-jike-refresh-token") or response.headers.get(
+                    "x-jike-refresh-token"
+                )
+                if access_token and new_refresh_token:
+                    self.token_store.save_login(
+                        access_token,
+                        new_refresh_token,
+                        auth,
+                        auth_method=auth_method,
+                    )
+                    return access_token
+                last_message = "token 刷新未返回完整凭据"
+            raise XiaoyuzhouAuthenticationRequired(last_message)
 
     def headers(
         self,
@@ -201,9 +306,11 @@ class XiaoyuzhouAuthProvider:
         content_type: str = "application/json",
     ) -> Dict[str, str]:
         headers = {
-            "User-Agent": "Xiaoyuzhou/2.57.1 (build:1576; iOS 17.4.1)",
+            "User-Agent": (
+                f"Xiaoyuzhou/{APP_VERSION} (build:{APP_BUILD_NO}; iOS {IOS_VERSION})"
+            ),
             "Market": "AppStore",
-            "App-BuildNo": "1576",
+            "App-BuildNo": APP_BUILD_NO,
             "OS": "ios",
             "x-jike-device-id": self.token_store.get_or_create_device_id(),
             "Manufacturer": "Apple",
@@ -212,19 +319,34 @@ class XiaoyuzhouAuthProvider:
             "Accept-Language": "zh-Hans-CN;q=1.0",
             "Model": "iPhone14,2",
             "app-permissions": "4",
-            "Accept": "application/json",
+            "Accept": "*/*",
             "Content-Type": content_type,
-            "App-Version": "2.57.1",
+            "App-Version": APP_VERSION,
             "WifiConnected": "true",
-            "OS-Version": "17.4.1",
+            "OS-Version": IOS_VERSION,
             "Local-Time": datetime.now().astimezone().isoformat(timespec="seconds"),
             "Timezone": "Asia/Shanghai",
+            "x-custom": X_CUSTOM_HEADER,
         }
         if access_token:
             headers["x-jike-access-token"] = access_token
         if refresh_token:
             headers["x-jike-refresh-token"] = refresh_token
         return headers
+
+    @staticmethod
+    def qr_headers() -> Dict[str, str]:
+        return {
+            "Content-Type": "application/json",
+            "x-midway-app-id": QR_APP_ID,
+            "Origin": "https://accounts.xiaoyuzhoufm.com",
+            "Referer": "https://accounts.xiaoyuzhoufm.com/",
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/151.0.0.0 Safari/537.36"
+            ),
+        }
 
     @staticmethod
     def response_json(response) -> Dict[str, Any]:
@@ -234,17 +356,20 @@ class XiaoyuzhouAuthProvider:
         except (ValueError, json.JSONDecodeError):
             return {}
 
+    @staticmethod
+    def response_message(payload: Dict[str, Any], fallback: str) -> str:
+        for key in ("toast", "message", "msg", "error_message", "error"):
+            value = payload.get(key)
+            if isinstance(value, str) and value:
+                return value
+        return fallback
+
     @classmethod
     def raise_for_response(cls, response, fallback_message: str) -> None:
         if 200 <= response.status_code < 300:
             return
         payload = cls.response_json(response)
-        message = ""
-        for key in ("message", "msg", "error_message", "error"):
-            value = payload.get(key)
-            if isinstance(value, str) and value:
-                message = value
-                break
+        message = cls.response_message(payload, fallback_message)
         if response.status_code == 401:
-            raise XiaoyuzhouAuthenticationRequired(message or fallback_message)
-        raise XiaoyuzhouApiError(message or fallback_message, response.status_code)
+            raise XiaoyuzhouAuthenticationRequired(message)
+        raise XiaoyuzhouApiError(message, response.status_code)

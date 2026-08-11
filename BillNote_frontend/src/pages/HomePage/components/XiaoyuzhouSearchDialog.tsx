@@ -99,8 +99,8 @@ export default function XiaoyuzhouSearchDialog({ open, onOpenChange, onSelect }:
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[min(720px,85vh)] max-w-3xl grid-rows-none flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b px-6 py-5">
+      <DialogContent className="flex h-[100dvh] max-w-none grid-rows-none flex-col gap-0 overflow-hidden rounded-none border-0 p-0 sm:h-[min(720px,85vh)] sm:max-w-3xl sm:rounded-lg sm:border">
+        <DialogHeader className="border-b px-4 py-4 text-left sm:px-6 sm:py-5">
           <DialogTitle>搜索小宇宙单集</DialogTitle>
           <DialogDescription>选择单集后将自动填入链接</DialogDescription>
         </DialogHeader>
@@ -116,21 +116,21 @@ export default function XiaoyuzhouSearchDialog({ open, onOpenChange, onSelect }:
           </div>
         ) : (
           <>
-            <form onSubmit={handleSubmit} className="flex gap-2 border-b px-6 py-4">
+            <form onSubmit={handleSubmit} className="flex flex-col gap-2 border-b px-4 py-3 sm:flex-row sm:px-6 sm:py-4">
               <Input
                 autoFocus
                 value={query}
                 onChange={event => setQuery(event.target.value)}
                 placeholder="搜索单集标题或内容"
               />
-              <Button type="submit" disabled={loading || !query.trim()}>
+              <Button type="submit" className="h-11 sm:h-9" disabled={loading || !query.trim()}>
                 {loading ? <Loader2 className="animate-spin" /> : <Search />}
                 搜索
               </Button>
             </form>
 
             <ScrollArea className="min-h-0 flex-1">
-              <div className="px-6 py-3">
+              <div className="px-4 py-3 sm:px-6">
                 {!searched && !loading && (
                   <div className="text-muted-foreground py-16 text-center text-sm">输入关键词开始搜索</div>
                 )}
@@ -147,12 +147,12 @@ export default function XiaoyuzhouSearchDialog({ open, onOpenChange, onSelect }:
                         onSelect(item)
                         onOpenChange(false)
                       }}
-                      className="flex w-full gap-4 py-4 text-left transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="flex min-h-24 w-full gap-3 py-4 text-left transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50 sm:gap-4"
                     >
                       <img
                         src={item.cover_url || '/placeholder.png'}
                         alt=""
-                        className="h-20 w-20 shrink-0 rounded-md border object-cover"
+                        className="h-16 w-16 shrink-0 rounded-md border object-cover sm:h-20 sm:w-20"
                         onError={event => {
                           event.currentTarget.src = '/placeholder.png'
                         }}

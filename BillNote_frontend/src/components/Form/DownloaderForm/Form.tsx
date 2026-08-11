@@ -78,14 +78,14 @@ const DownloaderForm = () => {
               <FormItem className="flex flex-col gap-2">
                 <FormLabel>Cookie</FormLabel>
                 <FormControl>
-                  <Input {...field} placeholder="输入 Cookie" />
+                  <Input {...field} placeholder="输入 Cookie" className="h-11 md:h-9" />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
 
-          <Button type="submit">保存</Button>
+          <Button type="submit" className="h-11 md:h-9">保存</Button>
         </form>
       </Form>
     </div>

@@ -1,5 +1,9 @@
 import { Podcast } from 'lucide-react'
 
+export const ApplePodcastsLogo = () => {
+  return <Podcast className="h-full w-full text-[#a842b8]" strokeWidth={2.2} />
+}
+
 export const XiaoyuzhouLogo = () => {
   return <Podcast className="h-full w-full text-[#f36c4f]" strokeWidth={2.2} />
 }

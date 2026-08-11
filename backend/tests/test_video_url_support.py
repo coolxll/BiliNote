@@ -58,6 +58,27 @@ class TestVideoUrlSupport(unittest.TestCase):
         self.assertFalse(video_url_validator.is_supported_video_url(url))
         self.assertIsNone(url_parser.extract_video_id(url, "xiaoyuzhou"))
 
+    def test_accepts_apple_podcasts_episode_url_and_extracts_episode_id(self):
+        url = "https://podcasts.apple.com/cn/podcast/example/id1582119137?i=1000774969980"
+
+        self.assertTrue(video_url_validator.is_supported_video_url(url))
+        self.assertEqual(
+            url_parser.extract_video_id(url, "apple_podcasts"),
+            "1000774969980",
+        )
+
+    def test_rejects_apple_show_url_without_episode_query(self):
+        url = "https://podcasts.apple.com/cn/podcast/example/id1582119137"
+
+        self.assertFalse(video_url_validator.is_supported_video_url(url))
+        self.assertIsNone(url_parser.extract_video_id(url, "apple_podcasts"))
+
+    def test_rejects_spoofed_apple_podcasts_host(self):
+        url = "https://example.com/cn/podcast/example/id1582119137?i=1000774969980"
+
+        self.assertFalse(video_url_validator.is_supported_video_url(url))
+        self.assertIsNone(url_parser.extract_video_id(url, "apple_podcasts"))
+
 
 if __name__ == "__main__":
     unittest.main()

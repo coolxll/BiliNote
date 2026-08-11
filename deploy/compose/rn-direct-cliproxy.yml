@@ -1,0 +1,10 @@
+services:
+  backend:
+    networks:
+      - default
+      - cliproxyapi
+
+networks:
+  cliproxyapi:
+    external: true
+    name: cli-proxy-api_default

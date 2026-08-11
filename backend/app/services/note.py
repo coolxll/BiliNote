@@ -36,6 +36,7 @@ from app.transcriber.transcriber_provider import get_transcriber, _transcribers
 from app.utils.note_helper import replace_content_markers, prepend_source_link
 from app.utils.screenshot_marker import extract_screenshot_timestamps
 from app.utils.status_code import StatusCode
+from app.utils.url_parser import extract_video_id
 from app.utils.video_helper import generate_screenshot
 from app.utils.video_reader import VideoReader
 
@@ -395,7 +396,13 @@ class NoteGenerator:
                 logger.info(f"元信息提取完成 ({audio_cache_file})")
                 return audio
             except Exception as exc:
-                logger.warning(f"元信息提取失败，将尝试完整下载: {exc}")
+                logger.warning(f"元信息提取失败，已有字幕将使用最小元信息继续处理: {exc}")
+                audio = self._build_minimal_audio_metadata(video_url, platform)
+                audio_cache_file.write_text(
+                    json.dumps(asdict(audio), ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+                return audio
 
         # 判断是否需要下载视频
         need_video = screenshot or video_understanding
@@ -442,6 +449,27 @@ class NoteGenerator:
             logger.error(f"音频下载失败：{exc}")
             self._handle_exception(task_id, exc)
             raise
+
+    @staticmethod
+    def _build_minimal_audio_metadata(
+        video_url: Union[str, HttpUrl],
+        platform: str,
+    ) -> AudioDownloadResult:
+        normalized_url = str(video_url)
+        video_id = extract_video_id(normalized_url, platform) or normalized_url
+        return AudioDownloadResult(
+            file_path="",
+            title=video_id,
+            duration=0,
+            cover_url=None,
+            platform=platform,
+            video_id=video_id,
+            raw_info={
+                "webpage_url": normalized_url,
+                "metadata_fallback": True,
+            },
+            video_path=None,
+        )
 
 
     def _get_transcript(

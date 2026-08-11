@@ -31,7 +31,7 @@ export const generateNote = async (data: {
     // 成功提示
 
     return response
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('❌ 请求出错', e)
 
     // 错误提示
@@ -63,7 +63,7 @@ export const get_task_status = async (task_id: string) => {
   try {
     // 成功提示
 
-    return await request.get('/task_status/' + task_id)
+    return await request.get('/task_status/' + task_id, { suppressToast: true })
   } catch (e) {
     console.error('❌ 请求出错', e)
 

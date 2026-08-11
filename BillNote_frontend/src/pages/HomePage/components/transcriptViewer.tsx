@@ -2,7 +2,6 @@
 
 import { useTaskStore } from "@/store/taskStore"
 import { useEffect, useState, useRef } from "react"
-import { Play } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {ScrollArea} from "@/components/ui/scroll-area.tsx";
 
@@ -41,15 +40,8 @@ const TranscriptViewer = () => {
     // Here you could add functionality to play the audio from this segment
   }
 
-  const scrollToSegment = (index: number) => {
-    segmentRefs.current[index]?.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-    })
-  }
-
   return (
-      <div className="transcript-viewer flex h-full w-full flex-col  rounded-md border bg-white p-4 shadow-sm">
+      <div className="transcript-viewer flex h-full w-full flex-col rounded-md border bg-white p-3 shadow-sm md:p-4">
         <h2 className="mb-4 text-lg font-medium">转写结果</h2>
         {!task?.transcript?.segments?.length ? (
             <div className="flex h-full items-center justify-center text-muted-foreground">暂无转写内容</div>
@@ -57,7 +49,7 @@ const TranscriptViewer = () => {
             <>
 
 
-            <div className="mb-3 grid grid-cols-[80px_1fr] gap-2 border-b pb-2 text-xs font-medium text-muted-foreground">
+            <div className="mb-3 grid grid-cols-[64px_1fr] gap-2 border-b pb-2 text-xs font-medium text-muted-foreground md:grid-cols-[80px_1fr]">
                 <div>时间</div>
                 <div>内容</div>
               </div>
@@ -69,7 +61,7 @@ const TranscriptViewer = () => {
                         key={index}
                         ref={(el) => (segmentRefs.current[index] = el)}
                         className={cn(
-                            "group grid grid-cols-[80px_1fr] gap-2 rounded-md p-2 transition-colors hover:bg-slate-50",
+                            "group grid grid-cols-[64px_1fr] gap-2 rounded-md p-2 transition-colors hover:bg-slate-50 md:grid-cols-[80px_1fr]",
                             activeSegment === index && "bg-slate-100",
                         )}
                         onClick={() => handleSegmentClick(index)}

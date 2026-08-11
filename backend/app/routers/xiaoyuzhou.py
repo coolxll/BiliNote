@@ -36,6 +36,15 @@ class LoginRequest(PhoneRequest):
         return value.strip()
 
 
+class QrPollRequest(BaseModel):
+    id: str = Field(min_length=8, max_length=128)
+
+    @field_validator("id")
+    @classmethod
+    def strip_id(cls, value: str) -> str:
+        return value.strip()
+
+
 class SearchRequest(BaseModel):
     keyword: str = Field(min_length=1, max_length=100)
     load_more_key: Optional[Dict[str, Any]] = None
@@ -66,8 +75,25 @@ def auth_status():
 @router.post("/xiaoyuzhou/auth/send-code")
 def send_code(data: PhoneRequest):
     try:
-        auth_provider.send_code(data.mobile_phone_number, data.area_code)
-        return R.success(msg="验证码已发送")
+        result = auth_provider.send_code(data.mobile_phone_number, data.area_code)
+        return R.success(data=result, msg=result["message"])
+    except Exception as error:
+        return provider_error(error)
+
+
+@router.post("/xiaoyuzhou/auth/qrcode/create")
+def create_qrcode():
+    try:
+        return R.success(data=auth_provider.create_qr_session())
+    except Exception as error:
+        return provider_error(error)
+
+
+@router.post("/xiaoyuzhou/auth/qrcode/poll")
+def poll_qrcode(data: QrPollRequest):
+    try:
+        result = auth_provider.poll_qr_session(data.id)
+        return R.success(data=result)
     except Exception as error:
         return provider_error(error)
 

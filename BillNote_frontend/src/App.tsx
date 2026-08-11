@@ -13,6 +13,8 @@ import { HomePage } from './pages/HomePage/Home.tsx'
 // 非首屏页面使用 React.lazy 按需加载
 const Onboarding = lazy(() => import('@/pages/Onboarding'))
 const SettingPage = lazy(() => import('./pages/SettingPage/index.tsx'))
+const PodcastsPage = lazy(() => import('./pages/Podcasts/PodcastsPage.tsx'))
+const PodcastShowPage = lazy(() => import('./pages/Podcasts/PodcastShowPage.tsx'))
 
 // 桌面端首启引导守卫：未完成 onboarding 时强制跳到 /onboarding
 function OnboardingGuard({ children }: { children: React.ReactNode }) {
@@ -73,6 +75,8 @@ function App() {
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/" element={<OnboardingGuard><Index /></OnboardingGuard>}>
               <Route index element={<HomePage />} />
+              <Route path="podcasts" element={<PodcastsPage />} />
+              <Route path="podcasts/:source/:podcastId" element={<PodcastShowPage />} />
               <Route path="settings" element={<SettingPage />}>
                 <Route index element={<Navigate to="model" replace />} />
                 <Route path="model" element={<Model />}>

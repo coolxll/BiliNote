@@ -1,8 +1,8 @@
-import { FC, useEffect, useState } from 'react'
-import HomeLayout from '@/layouts/HomeLayout.tsx'
+import { FC, useEffect, useRef, useState } from 'react'
+import HomeLayout, { type MobileHomeView } from '@/layouts/HomeLayout.tsx'
 import NoteForm from '@/pages/HomePage/components/NoteForm.tsx'
 import MarkdownViewer from '@/pages/HomePage/components/MarkdownViewer.tsx'
-import { useTaskStore } from '@/store/taskStore'
+import { hasUsableMarkdown, useTaskStore } from '@/store/taskStore'
 import History from '@/pages/HomePage/components/History.tsx'
 type ViewStatus = 'idle' | 'loading' | 'success' | 'failed'
 export const HomePage: FC = () => {
@@ -12,13 +12,17 @@ export const HomePage: FC = () => {
   const currentTask = tasks.find(t => t.id === currentTaskId)
 
   const [status, setStatus] = useState<ViewStatus>('idle')
-
-  const content = currentTask?.markdown || ''
+  const [mobileView, setMobileView] = useState<MobileHomeView>(currentTaskId ? 'note' : 'create')
+  const previousTaskId = useRef(currentTaskId)
+  const setCurrentTask = useTaskStore(state => state.setCurrentTask)
 
   useEffect(() => {
     if (!currentTask) {
       setStatus('idle')
-    } else if (currentTask.status === 'SUCCESS') {
+    } else if (
+      currentTask.status === 'SUCCESS' ||
+      (currentTask.status === 'FAILED' && hasUsableMarkdown(currentTask.markdown))
+    ) {
       setStatus('success')
     } else if (currentTask.status === 'FAILED') {
       setStatus('failed')
@@ -27,6 +31,21 @@ export const HomePage: FC = () => {
       setStatus('loading')
     }
   }, [currentTask, currentTask?.status])
+
+  useEffect(() => {
+    if (currentTaskId && currentTaskId !== previousTaskId.current) {
+      setMobileView('note')
+    }
+    else if (!currentTaskId && previousTaskId.current) {
+      setMobileView(tasks.length > 0 ? 'history' : 'create')
+    }
+    previousTaskId.current = currentTaskId
+  }, [currentTaskId, tasks.length])
+
+  const handleHistorySelect = (taskId: string) => {
+    setCurrentTask(taskId)
+    setMobileView('note')
+  }
 
   // useEffect( () => {
   //     get_task_status('d4e87938-c066-48a0-bbd5-9bec40d53354').then(res=>{
@@ -38,7 +57,9 @@ export const HomePage: FC = () => {
     <HomeLayout
       NoteForm={<NoteForm />}
       Preview={<MarkdownViewer status={status} />}
-      History={<History />}
+      History={<History onSelect={handleHistorySelect} />}
+      mobileView={mobileView}
+      onMobileViewChange={setMobileView}
     />
   )
 }

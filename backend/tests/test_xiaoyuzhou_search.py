@@ -73,6 +73,101 @@ class TestXiaoyuzhouSearchProvider(unittest.TestCase):
         self.assertNotIn("access_token", status)
         self.assertEqual(self.store.read()["access_token"], "access-token")
 
+    def test_send_code_returns_request_metadata_and_current_client_header(self):
+        self.session.post.return_value = FakeResponse(
+            payload={"success": True},
+            headers={"X-Request-Id": "request-1"},
+        )
+
+        result = self.auth.send_code("13100000000")
+
+        self.assertEqual(result["message"], "验证码请求已提交")
+        self.assertEqual(result["request_id"], "request-1")
+        headers = self.session.post.call_args.kwargs["headers"]
+        self.assertEqual(headers["Accept"], "*/*")
+        self.assertEqual(headers["x-custom"], "eyJ2ZXJzaW9uIjoiMS4wIn0=")
+        self.assertEqual(headers["App-Version"], "2.114.0")
+        self.assertEqual(headers["App-BuildNo"], "1576")
+        self.assertIn("Xiaoyuzhou/2.114.0", headers["User-Agent"])
+
+    def test_send_code_surfaces_upstream_toast(self):
+        self.session.post.return_value = FakeResponse(
+            status_code=429,
+            payload={"code": 1, "toast": "请求过于频繁，请稍后再试"},
+        )
+
+        with self.assertRaises(auth_module.XiaoyuzhouApiError) as context:
+            self.auth.send_code("13100000000")
+
+        self.assertEqual(str(context.exception), "请求过于频繁，请稍后再试")
+
+    def test_create_qr_session_returns_validated_session(self):
+        self.session.post.return_value = FakeResponse(
+            payload={
+                "id": "qr-session-1",
+                "url": "https://h5.xiaoyuzhoufm.com/oauth?qrcode_id=qr-session-1",
+            }
+        )
+
+        result = self.auth.create_qr_session()
+
+        self.assertEqual(result["id"], "qr-session-1")
+        self.assertEqual(result["status"], "WAITTING")
+        self.assertEqual(result["expires_in"], 180)
+        request = self.session.post.call_args
+        self.assertEqual(request.kwargs["json"], {"clientId": "xyz-web"})
+        self.assertEqual(request.kwargs["headers"]["x-midway-app-id"], "v6worU4NnWyL")
+
+    def test_poll_qr_session_keeps_waiting_without_tokens(self):
+        self.session.post.return_value = FakeResponse(payload={"status": "WAITTING"})
+
+        result = self.auth.poll_qr_session("qr-session-1")
+
+        self.assertEqual(result, {"status": "WAITTING", "authenticated": False})
+        self.assertFalse(self.auth.auth_status()["authenticated"])
+
+    def test_poll_qr_session_saves_confirmed_tokens(self):
+        self.session.post.return_value = FakeResponse(
+            payload={"status": "CONFIRMED"},
+            headers={
+                "x-jike-access-token": "qr-access-token",
+                "x-jike-refresh-token": "qr-refresh-token",
+            },
+        )
+
+        result = self.auth.poll_qr_session("qr-session-1")
+
+        self.assertEqual(result, {"status": "CONFIRMED", "authenticated": True})
+        stored = self.store.read()
+        self.assertEqual(stored["access_token"], "qr-access-token")
+        self.assertEqual(stored["refresh_token"], "qr-refresh-token")
+        self.assertEqual(stored["auth_method"], "qrcode")
+
+    def test_qr_credentials_refresh_through_web_api(self):
+        self.store.save_login(
+            "old-access",
+            "old-refresh",
+            auth_method="qrcode",
+        )
+        self.session.post.return_value = FakeResponse(
+            payload={
+                "success": True,
+                "x-jike-access-token": "new-access",
+                "x-jike-refresh-token": "new-refresh",
+            }
+        )
+
+        access_token = self.auth.refresh_tokens()
+
+        self.assertEqual(access_token, "new-access")
+        request = self.session.post.call_args
+        self.assertEqual(
+            request.args[0],
+            "https://web-api.xiaoyuzhoufm.com/app_auth_tokens.refresh",
+        )
+        self.assertEqual(request.kwargs["json"], {})
+        self.assertEqual(self.store.read()["refresh_token"], "new-refresh")
+
     def test_search_normalizes_episode_and_returns_pagination_key(self):
         self.store.save_login("access-token", "refresh-token", {})
         self.session.post.return_value = FakeResponse(

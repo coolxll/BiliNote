@@ -193,6 +193,13 @@ async def upload(file: UploadFile = File(...)):
 @router.post("/generate_note")
 def generate_note(data: VideoRequest, background_tasks: BackgroundTasks):
     try:
+        if data.platform in {"apple_podcasts", "xiaoyuzhou"}:
+            data.screenshot = False
+            data.link = False
+            data.video_understanding = False
+            data.format = [
+                value for value in (data.format or []) if value not in {"link", "screenshot"}
+            ]
         # 就绪门禁：本地转写引擎（fast-whisper / mlx-whisper）必须等模型下载完才能跑视频，
         # 否则任务会卡在首次下载（慢 / OOM / 截断），用户只看到一个静默失败的任务。
         # 客户端已抓好字幕（prefetched_transcript）则不需要转写，跳过检查。
@@ -288,17 +295,24 @@ def get_task_status(task_id: str):
                 })
 
         if status == TaskStatus.FAILED.value:
-            return R.error(
-                message or "任务失败",
-                code=500,
-                data={
-                    "status": status,
-                    "message": message or "任务失败",
-                    "logs": task_logs,
-                    "updated_at": status_content.get("updated_at"),
-                    "task_id": task_id,
-                },
-            )
+            failure_data = {
+                "status": status,
+                "message": message or "任务失败",
+                "logs": task_logs,
+                "updated_at": status_content.get("updated_at"),
+                "task_id": task_id,
+                "has_result": False,
+            }
+            if os.path.exists(result_path):
+                try:
+                    with open(result_path, "r", encoding="utf-8") as rf:
+                        failure_data["result"] = json.load(rf)
+                    failure_data["has_result"] = True
+                except (OSError, json.JSONDecodeError):
+                    logger.warning("任务失败且旧结果文件无法读取 (task_id=%s)", task_id)
+
+            # FAILED 是任务业务状态，不是 task_status 接口本身调用失败。
+            return R.success(failure_data)
 
         # 处理中状态
         return R.success({

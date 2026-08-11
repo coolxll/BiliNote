@@ -18,7 +18,7 @@ const Provider = () => {
           onClick={() => {
             handleClick()
           }}
-          className="w-full"
+          className="h-11 w-full md:h-9"
         >
           添加模型供应商
         </Button>

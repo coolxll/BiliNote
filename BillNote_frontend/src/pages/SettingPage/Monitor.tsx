@@ -29,7 +29,7 @@ export default function Monitor() {
             const data = await getDeployStatus()
             setStatus(data)
             setLastUpdated(new Date())
-        } catch (err) {
+        } catch {
             setError('无法连接到后端服务')
             setStatus(null)
         } finally {
@@ -59,16 +59,16 @@ export default function Monitor() {
 
     return (
         <ScrollArea className="h-full overflow-y-auto bg-white">
-            <div className="container mx-auto px-4 py-8">
+            <div className="container mx-auto px-4 py-5 md:py-8">
                 {/* Header */}
-                <div className="mb-8 flex items-center justify-between">
+                <div className="mb-6 flex flex-col items-start gap-3 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h1 className="text-2xl font-bold">部署监控</h1>
                         <p className="text-muted-foreground text-sm">
                             实时监控系统各组件运行状态
                         </p>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:gap-4">
                         {lastUpdated && (
                             <span className="text-muted-foreground text-xs">
                                 最后更新: {lastUpdated.toLocaleTimeString()}
@@ -77,6 +77,7 @@ export default function Monitor() {
                         <Button
                             variant="outline"
                             size="sm"
+                            className="h-11 sm:h-9"
                             onClick={fetchStatus}
                             disabled={loading}
                         >

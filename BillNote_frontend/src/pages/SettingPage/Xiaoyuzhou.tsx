@@ -1,16 +1,17 @@
-import { useEffect, useState } from 'react'
-import { CheckCircle2, Loader2, LogOut, MessageSquareText, Podcast } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { QRCode } from 'antd'
+import { CheckCircle2, Loader2, LogOut, Podcast, RefreshCw, ScanLine } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import {
   getXiaoyuzhouAuthStatus,
-  loginXiaoyuzhou,
+  createXiaoyuzhouQrSession,
   logoutXiaoyuzhou,
-  sendXiaoyuzhouCode,
+  pollXiaoyuzhouQrSession,
   type XiaoyuzhouAuthStatus,
+  type XiaoyuzhouQrSession,
 } from '@/services/xiaoyuzhou'
 
 const EMPTY_STATUS: XiaoyuzhouAuthStatus = {
@@ -22,13 +23,12 @@ const EMPTY_STATUS: XiaoyuzhouAuthStatus = {
 
 export default function XiaoyuzhouSettings() {
   const [status, setStatus] = useState<XiaoyuzhouAuthStatus>(EMPTY_STATUS)
-  const [phone, setPhone] = useState('')
-  const [code, setCode] = useState('')
   const [loading, setLoading] = useState(true)
-  const [sending, setSending] = useState(false)
-  const [loggingIn, setLoggingIn] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
-  const [countdown, setCountdown] = useState(0)
+  const [qrSession, setQrSession] = useState<XiaoyuzhouQrSession | null>(null)
+  const [qrStatus, setQrStatus] = useState('')
+  const [qrLoading, setQrLoading] = useState(false)
+  const [qrError, setQrError] = useState('')
 
   useEffect(() => {
     getXiaoyuzhouAuthStatus()
@@ -36,51 +36,67 @@ export default function XiaoyuzhouSettings() {
       .finally(() => setLoading(false))
   }, [])
 
+  const createQrSession = useCallback(async () => {
+    setQrLoading(true)
+    setQrError('')
+    try {
+      const nextSession = await createXiaoyuzhouQrSession()
+      setQrSession(nextSession)
+      setQrStatus(nextSession.status)
+    } catch {
+      setQrSession(null)
+      setQrError('二维码创建失败，请稍后重试')
+    } finally {
+      setQrLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
-    if (countdown <= 0) return
-    const timer = window.setTimeout(() => setCountdown(value => value - 1), 1000)
-    return () => window.clearTimeout(timer)
-  }, [countdown])
+    if (loading || status.authenticated || qrSession || qrLoading) return
+    void createQrSession()
+  }, [createQrSession, loading, qrLoading, qrSession, status.authenticated])
 
-  const handleSendCode = async () => {
-    if (!phone.trim()) {
-      toast.error('请输入手机号')
-      return
-    }
-    setSending(true)
-    try {
-      await sendXiaoyuzhouCode({ mobile_phone_number: phone.trim(), area_code: '+86' })
-      setCountdown(60)
-      toast.success('验证码已发送')
-    } finally {
-      setSending(false)
-    }
-  }
+  useEffect(() => {
+    if (!qrSession || status.authenticated) return
+    let cancelled = false
+    let polling = false
 
-  const handleLogin = async () => {
-    if (!phone.trim() || !code.trim()) {
-      toast.error('请输入手机号和验证码')
-      return
+    const poll = async () => {
+      if (polling) return
+      polling = true
+      try {
+        const result = await pollXiaoyuzhouQrSession(qrSession.id)
+        if (cancelled) return
+        setQrStatus(result.status)
+        if (result.authenticated) {
+          setStatus(await getXiaoyuzhouAuthStatus())
+          toast.success('小宇宙登录成功')
+          return
+        }
+        if (['EXPIRED', 'USED'].includes(result.status)) {
+          setQrError('二维码已失效，请刷新后重试')
+        }
+      } catch {
+        if (!cancelled) setQrError('登录状态查询失败，请刷新二维码')
+      } finally {
+        polling = false
+      }
     }
-    setLoggingIn(true)
-    try {
-      const nextStatus = await loginXiaoyuzhou({
-        mobile_phone_number: phone.trim(),
-        verify_code: code.trim(),
-        area_code: '+86',
-      })
-      setStatus(nextStatus)
-      setCode('')
-      toast.success('小宇宙登录成功')
-    } finally {
-      setLoggingIn(false)
+
+    void poll()
+    const timer = window.setInterval(poll, 2000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
     }
-  }
+  }, [qrSession, status.authenticated])
 
   const handleLogout = async () => {
     setLoggingOut(true)
     try {
       setStatus(await logoutXiaoyuzhou())
+      setQrSession(null)
+      setQrStatus('')
       toast.success('已退出小宇宙')
     } finally {
       setLoggingOut(false)
@@ -130,56 +146,28 @@ export default function XiaoyuzhouSettings() {
             </Button>
           </div>
         ) : (
-          <div className="mt-6 space-y-5">
-            <div className="space-y-2">
-              <label htmlFor="xiaoyuzhou-phone" className="text-sm font-medium">手机号</label>
-              <div className="flex gap-2">
-                <div className="flex h-9 w-16 shrink-0 items-center justify-center rounded-md border bg-neutral-50 text-sm">
-                  +86
-                </div>
-                <Input
-                  id="xiaoyuzhou-phone"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  value={phone}
-                  onChange={event => setPhone(event.target.value)}
-                  placeholder="请输入手机号"
-                />
-              </div>
+          <div className="mt-6 flex flex-col items-center gap-4 text-center">
+            <div className="flex h-[min(14rem,calc(100vw-4rem))] w-[min(14rem,calc(100vw-4rem))] items-center justify-center rounded-md border border-neutral-200 bg-white p-3">
+              {qrSession ? (
+                <QRCode value={qrSession.url} size={200} bordered={false} />
+              ) : qrLoading ? (
+                <Loader2 className="text-muted-foreground h-7 w-7 animate-spin" />
+              ) : (
+                <ScanLine className="text-muted-foreground h-8 w-8" />
+              )}
             </div>
-
-            <div className="space-y-2">
-              <label htmlFor="xiaoyuzhou-code" className="text-sm font-medium">验证码</label>
-              <div className="flex gap-2">
-                <Input
-                  id="xiaoyuzhou-code"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  value={code}
-                  onChange={event => setCode(event.target.value)}
-                  placeholder="请输入验证码"
-                  maxLength={8}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-32 shrink-0"
-                  disabled={sending || countdown > 0}
-                  onClick={handleSendCode}
-                >
-                  {sending ? (
-                    <Loader2 className="animate-spin" />
-                  ) : (
-                    <MessageSquareText />
-                  )}
-                  {countdown > 0 ? `${countdown}s` : '发送验证码'}
-                </Button>
+            <div>
+              <div className="text-sm font-medium">
+                {qrStatus === 'SCANNED' ? '已扫码，请在小宇宙 App 中确认' : '使用小宇宙 App 扫码登录'}
               </div>
+              <div className="text-muted-foreground mt-1 text-sm">
+                二维码约 3 分钟内有效，确认后页面会自动完成登录。
+              </div>
+              {qrError && <div className="mt-2 text-sm text-red-600">{qrError}</div>}
             </div>
-
-            <Button onClick={handleLogin} disabled={loggingIn}>
-              {loggingIn && <Loader2 className="animate-spin" />}
-              登录
+            <Button variant="outline" onClick={createQrSession} disabled={qrLoading}>
+              {qrLoading ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+              刷新二维码
             </Button>
           </div>
         )}
